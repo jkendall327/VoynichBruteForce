@@ -40,9 +40,9 @@ public interface ITextModifier
     string ModifyText(string text);
 }
 
-public class CognitiveComplexity
+public readonly struct CognitiveComplexity
 {
-    public int Value { get; private set; }
+    public int Value { get; }
 
     public CognitiveComplexity(int value)
     {
@@ -60,9 +60,49 @@ public class CognitiveComplexity
 /// The intent is that they are then applied to a text in sequence.
 /// The sequence of algorithms may be entirely random, or determined in part by the nature of the provided source text.
 /// </summary>
-public interface IModifierCollectionProvider
+public interface IGenomeFactory
 {
-    List<ITextModifier> GetModificationPipeline(string text);
+    // Create a random list of modifiers (Gen 0)
+    List<ITextModifier> CreateRandomGenome(int length);
+
+    // Mutate an existing list (small change)
+    List<ITextModifier> Mutate(List<ITextModifier> original);
+}
+
+public enum RuleWeight
+{
+    /// <summary>
+    /// Nice to have, but not a dealbreaker (e.g., exact word count). Multiplier: 0.1
+    /// </summary>
+    Trivia = 0,
+
+    /// <summary>
+    /// Standard statistical feature (e.g., Zipf's law). Multiplier: 1.0
+    /// </summary>
+    Standard = 1,
+
+    /// <summary>
+    /// Hard to fake. If this fails, the method is wrong (e.g., H2 Entropy). Multiplier: 10.0
+    /// </summary>
+    High = 2,
+
+    /// <summary>
+    /// The "Golden Standard". If this is wrong, discard immediately. Multiplier: 50.0
+    /// </summary>
+    Critical = 3
+}
+
+public static class RuleWeightExtensions
+{
+    public static double ToMultiplier(this RuleWeight weight) =>
+        weight switch
+        {
+            RuleWeight.Trivia => 0.1,
+            RuleWeight.Standard => 1.0,
+            RuleWeight.High => 10.0,
+            RuleWeight.Critical => 50.0,
+            _ => 1.0
+        };
 }
 
 /// <summary>
@@ -72,20 +112,64 @@ public interface IModifierCollectionProvider
 public interface IRuleAdherenceRanker
 {
     string Name { get; }
-    Adherence AdheresToRule(string text);
+
+    /// <summary>
+    /// How important this ranking is to emulating the overall profile of the Voynich.
+    /// Some features, like low H2 entropy, are strikingly unique to the text, and hence are important to replicate.
+    /// </summary>
+    RuleWeight Weight { get; }
+
+    RankerResult CalculateRank(string text);
 }
 
-public record Adherence(string RuleName, double DeltaFromVoynich);
+public record RankerResult(
+    string RuleName,
+    double RawMeasuredValue, // e.g. 3.5 bits
+    double TargetValue, // e.g. 2.0 bits
+    double NormalizedError, // e.g. 1.5 (Standardized deviation)
+    RuleWeight Weight // Carried through for the final sum
+);
 
 public interface IRankerProvider
 {
     List<IRuleAdherenceRanker> GetRankers();
 }
 
+public class ConditionalEntropyRanker : IRuleAdherenceRanker
+{
+    public string Name => "H2 Entropy";
+
+    // This is critical because low H2 is the Voynich's defining feature
+    public RuleWeight Weight => RuleWeight.Critical;
+
+    public RankerResult CalculateRank(string text)
+    {
+        var actualH2 = ComputeH2(text);
+
+        var rawDelta = Math.Abs(actualH2 - VoynichConstants.TargetH2Entropy);
+
+        // NORMALIZATION LOGIC:
+        // We decide that being off by 0.5 bits is a "Full Error Unit" (1.0).
+        // Being off by 1.0 bit is 2.0 error units (or 4.0 if we square it).
+        var tolerance = 0.5;
+        var normalizedError = rawDelta / tolerance;
+
+        // Optional: Square the error to punish large deviations more severely
+        normalizedError = Math.Pow(normalizedError, 2);
+
+        return new RankerResult(Name, actualH2, VoynichConstants.TargetH2Entropy, normalizedError, Weight);
+    }
+
+    private double ComputeH2(string text)
+    {
+        throw new NotImplementedException();
+    }
+}
+
 public class VoynichConstants
 {
     // TODO: find real empirical values for these.
-    public const float TargetH2 = 2.0f;
+    public const float TargetH2Entropy = 2.0f;
     public const float TargetZipfSlope = 1.05f;
 }
 
@@ -109,16 +193,20 @@ public class PipelineResult
     /// <summary>
     /// Deltas from the Voynich for each ranking method.
     /// </summary>
-    public Dictionary<string, double> Stats { get; set; }
+    public List<RankerResult> Results { get; set; }
 
-    public PipelineResult(List<ITextModifier> modifiers, List<Adherence> results)
+    public PipelineResult(List<ITextModifier> modifiers, List<RankerResult> results)
     {
-        TotalCognitiveLoad = modifiers.Sum(s => s.CognitiveCost.Value);
-        TotalErrorScore = results.Sum(s => s.DeltaFromVoynich);
-
+        Results = results;
         PipelineDescription = string.Join(" -> ", modifiers.Select(m => m.Name));
-
-        Stats = results.ToDictionary(s => s.RuleName, s => s.DeltaFromVoynich);
+        TotalCognitiveLoad = modifiers.Sum(s => s.CognitiveCost.Value);
+        
+        var initialError = results.Sum(r => r.NormalizedError * r.Weight.ToMultiplier());
+        double cognitiveLoad = modifiers.Sum(m => m.CognitiveCost.Value);
+        
+        // Decide: Is 10 cognitive load equal to 1.0 Error Unit?
+        // Let's say yes.
+        TotalErrorScore = initialError + cognitiveLoad; 
     }
 }
 
@@ -129,16 +217,16 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
     public PipelineResult Run(Pipeline pipeline)
     {
         (var sourceText, var modifiers) = pipeline;
-        
+
         sourceText = modifiers.Aggregate(sourceText, (current, modifier) => modifier.ModifyText(current));
 
         var rankers = rankerProvider.GetRankers();
 
-        var results = new List<Adherence>();
+        var results = new List<RankerResult>();
 
         foreach (var ranker in rankers)
         {
-            var delta = ranker.AdheresToRule(sourceText);
+            var delta = ranker.CalculateRank(sourceText);
 
             logger.LogInformation("{RankingMethod}: {Error}", ranker.Name, delta);
         }
@@ -150,23 +238,87 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
 public class EvolutionEngine(
     PipelineRunner runner,
     ITextProvider textProvider,
-    IModifierCollectionProvider modifierProvider,
+    IGenomeFactory genomeFactory,
     ILogger<EvolutionEngine> logger)
 {
-    public void Evolve()
+    private const int PopulationSize = 100;
+    private const int MaxGenerations = 1000;
+
+    public void Evolve(int seed)
     {
-        // TODO: Should use a random text provider?
         var sourceText = textProvider.GetText();
-        var modifiers = modifierProvider.GetModificationPipeline(sourceText);
 
-        var result = runner.Run(new(sourceText, modifiers));
+        // 1. Initialize Population (Gen 0)
+        var population = new List<Pipeline>();
 
-        throw new NotImplementedException("Actually do evolution here somehow?");
+        for (var i = 0; i < PopulationSize; i++)
+        {
+            var modifiers = genomeFactory.CreateRandomGenome(length: 5);
+            population.Add(new(sourceText, modifiers));
+        }
 
-        // 1. Generate random modifier chains (Gen 0)
-        // 2. Measure Error against VoynichProfile
-        // 3. Kill the bottom 50%
-        // 4. Mutate the survivors (add a step, remove a step, change a param)
-        // 5. Repeat
+        for (var gen = 0; gen < MaxGenerations; gen++)
+        {
+            var rankedResults = new List<(Pipeline Pipeline, PipelineResult Result)>();
+
+            // 2. Evaluate Fitness
+            foreach (var creature in population)
+            {
+                var result = runner.Run(creature);
+
+                // Disqualify if too hard for a human to write
+                if (result.TotalCognitiveLoad > 25)
+                {
+                    result.TotalErrorScore += 9999; // Penalty
+                }
+
+                rankedResults.Add((creature, result));
+            }
+
+            // Order by lowest error (best fit)
+            var sorted = rankedResults
+                .OrderBy(x => x.Result.TotalErrorScore)
+                .ToList();
+
+            var best = sorted.First();
+
+            logger.LogInformation("Gen {Gen} Best: {Desc} | Error: {Err}",
+                gen,
+                best.Result.PipelineDescription,
+                best.Result.TotalErrorScore);
+
+            if (best.Result.TotalErrorScore < 0.05)
+            {
+                break; // Found it!
+            }
+
+            // 3. Selection & Reproduction
+            var nextGen = new List<Pipeline>();
+
+            // Elitism: Keep the top 10% unchanged
+            nextGen.AddRange(sorted
+                .Take(10)
+                .Select(x => x.Pipeline));
+
+            // Fill the rest with mutations of the top 50%
+            var survivors = sorted
+                .Take(PopulationSize / 2)
+                .ToList();
+
+            var random = new Random(seed);
+
+            while (nextGen.Count < PopulationSize)
+            {
+                // Pick a random parent from survivors
+                var randomSurvivor = survivors[random.Next(survivors.Count)];
+                var parent = randomSurvivor.Pipeline;
+
+                // Mutate
+                var childModifiers = genomeFactory.Mutate(parent.Modifiers);
+                nextGen.Add(new(sourceText, childModifiers));
+            }
+
+            population = nextGen;
+        }
     }
 }
