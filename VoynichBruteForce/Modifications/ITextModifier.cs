@@ -1,5 +1,3 @@
-using VoynichBruteForce.Rankings;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>

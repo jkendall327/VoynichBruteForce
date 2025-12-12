@@ -1,4 +1,4 @@
-namespace VoynichBruteForce.Rankings;
+namespace VoynichBruteForce.Modifications;
 
 public readonly struct CognitiveComplexity
 {
