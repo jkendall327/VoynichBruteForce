@@ -44,6 +44,9 @@ public readonly struct CognitiveComplexity
 {
     public int Value { get; }
 
+    public const int SoftWallComplexity = 10;
+    public const int HardWallComplexity = 100;
+
     public CognitiveComplexity(int value)
     {
         if (value is < 0 or > 10)
@@ -157,7 +160,7 @@ public class ConditionalEntropyRanker : IRuleAdherenceRanker
         // Optional: Square the error to punish large deviations more severely
         normalizedError = Math.Pow(normalizedError, 2);
 
-        return new RankerResult(Name, actualH2, VoynichConstants.TargetH2Entropy, normalizedError, Weight);
+        return new(Name, actualH2, VoynichConstants.TargetH2Entropy, normalizedError, Weight);
     }
 
     private double ComputeH2(string text)
@@ -200,13 +203,31 @@ public class PipelineResult
         Results = results;
         PipelineDescription = string.Join(" -> ", modifiers.Select(m => m.Name));
         TotalCognitiveLoad = modifiers.Sum(s => s.CognitiveCost.Value);
-        
+
         var initialError = results.Sum(r => r.NormalizedError * r.Weight.ToMultiplier());
         double cognitiveLoad = modifiers.Sum(m => m.CognitiveCost.Value);
-        
-        // Decide: Is 10 cognitive load equal to 1.0 Error Unit?
-        // Let's say yes.
-        TotalErrorScore = initialError + cognitiveLoad; 
+
+        /*
+         * We want to penalise very complex solutions, because the more complex they are,
+         * the less likey they were actually performed by the Voynich authors.
+         * But it should not be an overriding factor: the creators of the Voynich were clearly a unique breed!
+         * We will try to nudge the evolution towards a *simple* solution which emulates the Voynich, if one exists.
+         * But that's just an 'if'. We'll accept a complex one, within reason.
+         */
+
+        // Apply a soft penalty.
+        if (cognitiveLoad > CognitiveComplexity.SoftWallComplexity)
+        {
+            initialError *= 2.0;
+        }
+
+        // Apply a hard wall - arbitrarily decide this was too much for the original authors.
+        if (cognitiveLoad > CognitiveComplexity.HardWallComplexity)
+        {
+            initialError += 1000;
+        }
+
+        TotalErrorScore = initialError;
     }
 }
 
@@ -220,6 +241,15 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
 
         sourceText = modifiers.Aggregate(sourceText, (current, modifier) => modifier.ModifyText(current));
 
+        // Sanity check - prevent degenerate optimisation for empty texts by returning max error immediately.
+        if (sourceText.Length < 100)
+        {
+            return new(modifiers, [])
+            {
+                TotalErrorScore = double.MaxValue
+            };
+        }
+
         var rankers = rankerProvider.GetRankers();
 
         var results = new List<RankerResult>();
@@ -228,7 +258,7 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
         {
             var delta = ranker.CalculateRank(sourceText);
 
-            logger.LogInformation("{RankingMethod}: {Error}", ranker.Name, delta);
+            logger.LogTrace("{RankingMethod}: {Error}", ranker.Name, delta);
         }
 
         return new(modifiers, results);
