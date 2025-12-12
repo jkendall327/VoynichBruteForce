@@ -10,7 +10,7 @@ namespace VoynichBruteForce.Modifications;
 /// reach of a 15th-century cryptographer. The Voynich Manuscript's dating overlaps
 /// with Alberti's work.
 /// </summary>
-public class PolyalphabeticModifier : ITextModifier
+public class PolyalphabeticModifier : ISpanTextModifier
 {
     private readonly string _keyword;
     private readonly int[] _shifts;
@@ -34,6 +34,8 @@ public class PolyalphabeticModifier : ITextModifier
         _keyword = keyword.ToUpperInvariant();
         _shifts = _keyword.Select(c => c - 'A').ToArray();
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

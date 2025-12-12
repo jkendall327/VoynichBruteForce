@@ -9,7 +9,7 @@ namespace VoynichBruteForce.Modifications;
 /// for wordplay, pseudonyms, and encoding. The practice of rearranging
 /// letters was well-known to any educated person.
 /// </summary>
-public class AnagramModifier : ITextModifier
+public class AnagramModifier : ISpanTextModifier
 {
     private readonly AnagramMode _mode;
     private readonly int _seed;
@@ -39,6 +39,8 @@ public class AnagramModifier : ITextModifier
         _mode = mode;
         _seed = seed;
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

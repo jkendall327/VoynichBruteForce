@@ -9,7 +9,7 @@ namespace VoynichBruteForce.Modifications;
 /// paper/parchment arranged in a grid - no special tools or memorization beyond
 /// the column order (key).
 /// </summary>
-public class ColumnarTranspositionModifier : ITextModifier
+public class ColumnarTranspositionModifier : ISpanTextModifier
 {
     private readonly int[] _columnOrder;
 
@@ -82,6 +82,8 @@ public class ColumnarTranspositionModifier : ITextModifier
 
         return new ColumnarTranspositionModifier(readOrder);
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

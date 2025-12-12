@@ -9,7 +9,7 @@ namespace VoynichBruteForce.Modifications;
 /// that was certainly possible to perform by hand. The idea of splitting and
 /// weaving text requires no special tools, just careful attention.
 /// </summary>
-public class InterleaveModifier : ITextModifier
+public class InterleaveModifier : ISpanTextModifier
 {
     private readonly InterleaveMode _mode;
 
@@ -26,8 +26,16 @@ public class InterleaveModifier : ITextModifier
 
     public InterleaveModifier(InterleaveMode mode = InterleaveMode.HalvesAlternate)
     {
+        if (mode == InterleaveMode.ReverseInterleave)
+        {
+            throw new ArgumentException(
+                "ReverseInterleave mode is not supported by InterleaveModifier. Use ReverseInterleaveModifier instead.",
+                nameof(mode));
+        }
         _mode = mode;
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {
@@ -49,10 +57,6 @@ public class InterleaveModifier : ITextModifier
             case InterleaveMode.OddEvenSplit:
                 SplitOddEven(input, output, ref context);
                 break;
-            case InterleaveMode.ReverseInterleave:
-                throw new NotImplementedException(
-                    "ReverseInterleave mode cannot use Span<char> because it doubles the text length, " +
-                    "which would require dynamic buffer resizing.");
             default:
                 input.CopyTo(output);
                 context.Commit(input.Length);

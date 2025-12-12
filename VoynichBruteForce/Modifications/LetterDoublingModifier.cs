@@ -9,7 +9,7 @@ namespace VoynichBruteForce.Modifications;
 /// often doubled consonants in ways that differed from Latin conventions.
 /// This simple expansion technique requires no tools or memorization.
 /// </summary>
-public class LetterDoublingModifier : ITextModifier
+public class LetterDoublingModifier : ISpanTextModifier
 {
     private readonly HashSet<char>? _lettersToDouble;
 
@@ -30,6 +30,8 @@ public class LetterDoublingModifier : ITextModifier
     {
         _lettersToDouble = lettersToDouble?.ToHashSet(CharComparer.Instance);
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

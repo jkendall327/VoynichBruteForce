@@ -7,7 +7,7 @@ namespace VoynichBruteForce.Modifications;
 /// Hebrew and Arabic scripts naturally omit most vowels, and this practice
 /// was well-known to Renaissance scholars studying Semitic languages.
 /// </summary>
-public class VowelRemovalModifier : ITextModifier
+public class VowelRemovalModifier : ISpanTextModifier
 {
     private static readonly HashSet<char> Vowels = new()
     {
@@ -19,6 +19,8 @@ public class VowelRemovalModifier : ITextModifier
 
     // Low cognitive cost - vowels are easy to identify and skip
     public CognitiveComplexity CognitiveCost => new(1);
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

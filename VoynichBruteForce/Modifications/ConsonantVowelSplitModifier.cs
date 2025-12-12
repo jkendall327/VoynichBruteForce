@@ -10,7 +10,7 @@ namespace VoynichBruteForce.Modifications;
 /// no tools and leverages basic linguistic knowledge that any educated
 /// person would possess.
 /// </summary>
-public class ConsonantVowelSplitModifier : ITextModifier
+public class ConsonantVowelSplitModifier : ISpanTextModifier
 {
     private readonly bool _consonantsFirst;
 
@@ -38,6 +38,8 @@ public class ConsonantVowelSplitModifier : ITextModifier
     {
         _consonantsFirst = consonantsFirst;
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

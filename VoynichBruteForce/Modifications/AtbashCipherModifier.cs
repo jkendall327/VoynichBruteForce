@@ -9,12 +9,14 @@ namespace VoynichBruteForce.Modifications;
 /// The name comes from the first, last, second, and second-to-last Hebrew letters:
 /// Aleph-Tav-Beth-Shin.
 /// </summary>
-public class AtbashCipherModifier : ITextModifier
+public class AtbashCipherModifier : ISpanTextModifier
 {
     public string Name => "AtbashCipher";
 
     // Low cognitive cost - simple reversal of alphabet position
     public CognitiveComplexity CognitiveCost => new(2);
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

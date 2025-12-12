@@ -8,7 +8,7 @@ namespace VoynichBruteForce.Modifications;
 /// that requires no tools - just counting. The technique of reading every Nth letter
 /// was known in antiquity and could easily be performed by any literate person.
 /// </summary>
-public class SkipCipherModifier : ITextModifier
+public class SkipCipherModifier : ISpanTextModifier
 {
     private readonly int _skip;
 
@@ -33,6 +33,8 @@ public class SkipCipherModifier : ITextModifier
 
         _skip = skip;
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

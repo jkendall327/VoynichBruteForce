@@ -10,7 +10,7 @@ namespace VoynichBruteForce.Modifications;
 /// This technique was described by Leon Battista Alberti in his cryptographic
 /// treatise "De componendis cifris" (1467).
 /// </summary>
-public class NullInsertionModifier : ITextModifier
+public class NullInsertionModifier : ISpanTextModifier
 {
     private readonly char _nullChar;
     private readonly int _interval;
@@ -35,6 +35,8 @@ public class NullInsertionModifier : ITextModifier
         _nullChar = nullChar;
         _interval = interval;
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

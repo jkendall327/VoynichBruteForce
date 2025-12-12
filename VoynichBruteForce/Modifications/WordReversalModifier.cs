@@ -9,12 +9,14 @@ namespace VoynichBruteForce.Modifications;
 /// in the same period. Palindromes and word reversals were popular among
 /// Renaissance scholars as puzzles and in mystical/Kabbalistic contexts.
 /// </summary>
-public class WordReversalModifier : ITextModifier
+public class WordReversalModifier : ISpanTextModifier
 {
     public string Name => "WordReversal";
 
     // Moderate cognitive cost - requires attention but no memorization
     public CognitiveComplexity CognitiveCost => new(3);
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

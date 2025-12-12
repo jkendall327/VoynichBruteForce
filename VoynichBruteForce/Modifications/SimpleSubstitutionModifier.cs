@@ -8,7 +8,7 @@ namespace VoynichBruteForce.Modifications;
 /// throughout medieval and Renaissance Europe. The technique predates the
 /// 15th century by many centuries (used by the Romans, Arabs, and others).
 /// </summary>
-public class SimpleSubstitutionModifier : ITextModifier
+public class SimpleSubstitutionModifier : ISpanTextModifier
 {
     private readonly Dictionary<char, char> _substitutionMap;
     private readonly string _keyDescription;
@@ -53,6 +53,8 @@ public class SimpleSubstitutionModifier : ITextModifier
         _substitutionMap = new Dictionary<char, char>(mapping);
         _keyDescription = $"{mapping.Count} mappings";
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

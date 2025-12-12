@@ -9,7 +9,7 @@ namespace VoynichBruteForce.Modifications;
 /// were intimately familiar with morphological manipulation. Language
 /// games involving syllable movement existed across many cultures.
 /// </summary>
-public class AffixModifier : ITextModifier
+public class AffixModifier : ISpanTextModifier
 {
     private readonly string? _prefix;
     private readonly string? _suffix;
@@ -55,6 +55,8 @@ public class AffixModifier : ITextModifier
                 break;
         }
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

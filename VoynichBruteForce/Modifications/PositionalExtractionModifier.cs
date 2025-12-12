@@ -10,7 +10,7 @@ namespace VoynichBruteForce.Modifications;
 /// Greek poetry, and throughout medieval manuscripts. Any educated scholar
 /// would be familiar with composing and reading acrostics.
 /// </summary>
-public class PositionalExtractionModifier : ITextModifier
+public class PositionalExtractionModifier : ISpanTextModifier
 {
     private readonly int _position;
     private readonly bool _fromEnd;
@@ -52,6 +52,8 @@ public class PositionalExtractionModifier : ITextModifier
     /// Creates a telestich extractor (last letter of each word).
     /// </summary>
     public static PositionalExtractionModifier Telestich() => new(0, true);
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

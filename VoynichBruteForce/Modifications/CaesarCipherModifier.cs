@@ -5,7 +5,7 @@ namespace VoynichBruteForce.Modifications;
 /// Known since antiquity and famously used by Julius Caesar.
 /// A 15th-century Italian scholar would certainly have known this technique.
 /// </summary>
-public class CaesarCipherModifier : ITextModifier
+public class CaesarCipherModifier : ISpanTextModifier
 {
     private readonly int _shift;
 
@@ -19,6 +19,8 @@ public class CaesarCipherModifier : ITextModifier
         // Normalize shift to 0-25 range
         _shift = ((shift % 26) + 26) % 26;
     }
+
+    public string ModifyText(string text) => this.RunWithContext(text);
 
     public void Modify(ref ProcessingContext context)
     {

@@ -3,6 +3,30 @@ using System.Buffers;
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
+/// Extension methods for ISpanTextModifier to support the string-based API.
+/// </summary>
+public static class SpanTextModifierExtensions
+{
+    /// <summary>
+    /// Runs a Span-based modifier using a temporary ProcessingContext and returns the result as a string.
+    /// This allows ISpanTextModifier implementations to easily implement ModifyText(string).
+    /// </summary>
+    public static string RunWithContext(this ISpanTextModifier modifier, string input)
+    {
+        var context = new ProcessingContext(input, Math.Max(input.Length * 4, 256));
+        try
+        {
+            modifier.Modify(ref context);
+            return context.InputSpan.ToString();
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
+}
+
+/// <summary>
 /// A ref struct that manages ping-pong buffers from ArrayPool for zero-allocation
 /// text processing. Modifiers read from InputSpan and write to OutputSpan, then
 /// call Commit() to swap buffers.
