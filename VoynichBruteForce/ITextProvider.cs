@@ -218,9 +218,11 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
 
         foreach (var ranker in rankers)
         {
-            var delta = ranker.CalculateRank(sourceText);
+            var result = ranker.CalculateRank(sourceText);
 
-            logger.LogTrace("{RankingMethod}: {Error}", ranker.Name, delta);
+            results.Add(result);
+            
+            logger.LogTrace("{RankingMethod}: {Error}", ranker.Name, result);
         }
 
         return new(modifiers, results);
