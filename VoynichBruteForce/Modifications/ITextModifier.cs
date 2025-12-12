@@ -17,3 +17,13 @@ public interface ITextModifier
 
     string ModifyText(string text);
 }
+
+public class NoOpTextModifier : ITextModifier
+{
+    public string Name => "NoOpTextModifier";
+    public CognitiveComplexity CognitiveCost => new(0);
+    public string ModifyText(string text)
+    {
+        return text;
+    }
+}
