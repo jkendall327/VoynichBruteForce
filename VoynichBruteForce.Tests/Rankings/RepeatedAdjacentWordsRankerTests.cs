@@ -1,0 +1,119 @@
+using VoynichBruteForce.Rankings;
+
+namespace VoynichBruteForce.Tests.Rankings;
+
+public class RepeatedAdjacentWordsRankerTests
+{
+    [Fact]
+    public void CalculateRank_WithNoRepetitions_ReturnsZeroRatio()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("the quick brown fox jumps over lazy dog");
+
+        Assert.Equal(0.0, result.RawMeasuredValue);
+    }
+
+    [Fact]
+    public void CalculateRank_WithOneRepetition_CalculatesCorrectRatio()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        // "the the" is one repetition out of 4 words = 1/4 = 0.25
+        var result = ranker.CalculateRank("the the cat dog");
+
+        Assert.Equal(0.25, result.RawMeasuredValue, precision: 2);
+    }
+
+    [Fact]
+    public void CalculateRank_WithMultipleRepetitions_CalculatesCorrectRatio()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        // "word word" and "test test" = 2 repetitions out of 6 words = 2/6 ≈ 0.333
+        var result = ranker.CalculateRank("word word test test hello world");
+
+        Assert.Equal(0.333, result.RawMeasuredValue, precision: 2);
+    }
+
+    [Fact]
+    public void CalculateRank_IsCaseInsensitive()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("The THE cat CAT");
+
+        // 2 repetitions out of 4 words = 0.5
+        Assert.Equal(0.5, result.RawMeasuredValue);
+    }
+
+    [Fact]
+    public void CalculateRank_WithEmptyString_ReturnsZero()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("");
+
+        Assert.Equal(0.0, result.RawMeasuredValue);
+    }
+
+    [Fact]
+    public void CalculateRank_WithSingleWord_ReturnsZero()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("hello");
+
+        Assert.Equal(0.0, result.RawMeasuredValue);
+    }
+
+    [Fact]
+    public void CalculateRank_HandlesMultipleWhitespaceTypes()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("word\tword\ntest\rtest");
+
+        // 2 repetitions out of 4 words = 0.5
+        Assert.Equal(0.5, result.RawMeasuredValue);
+    }
+
+    [Fact]
+    public void CalculateRank_ReturnsCorrectRuleName()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("test test");
+
+        Assert.Equal("Repeated Adjacent Words", result.RuleName);
+    }
+
+    [Fact]
+    public void CalculateRank_ReturnsTargetValue()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("test test");
+
+        Assert.Equal(VoynichConstants.TargetRepeatedAdjacentWordsRatio, result.TargetValue);
+    }
+
+    [Fact]
+    public void CalculateRank_CalculatesNormalizedError()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        var result = ranker.CalculateRank("word word word"); // 2/3 ≈ 0.667
+
+        // Should have a non-zero normalized error since 0.667 != target
+        Assert.True(result.NormalizedError > 0);
+    }
+
+    [Fact]
+    public void Weight_ReturnsStandard()
+    {
+        var ranker = new RepeatedAdjacentWordsRanker();
+
+        Assert.Equal(RuleWeight.Standard, ranker.Weight);
+    }
+}
