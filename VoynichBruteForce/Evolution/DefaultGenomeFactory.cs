@@ -1,8 +1,9 @@
+using Microsoft.Extensions.Options;
 using VoynichBruteForce.Modifications;
 
 namespace VoynichBruteForce.Evolution;
 
-public class DefaultGenomeFactory : IGenomeFactory
+public class DefaultGenomeFactory(IOptions<AppSettings> options) : IGenomeFactory
 {
     public List<ITextModifier> CreateRandomGenome(int length)
     {
@@ -19,7 +20,7 @@ public class DefaultGenomeFactory : IGenomeFactory
         // TODO: properly understand this code instead of cargo-culting it.
 
         var child = new List<ITextModifier>();
-        var random = new Random();
+        var random = new Random(options.Value.Seed);
 
         // Pick a split point based on the shorter parent to avoid index errors
         var minLen = Math.Min(parentA.Count, parentB.Count);
