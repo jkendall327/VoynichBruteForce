@@ -13,15 +13,23 @@ public interface ITextModifier
     /// </summary>
     CognitiveComplexity CognitiveCost { get; }
 
-    string ModifyText(string text);
+    /// <summary>
+    /// Modifies text using Span-based ping-pong buffers for zero-allocation processing.
+    /// Read from context.InputSpan, write to context.OutputSpan, then call context.Commit(newLength).
+    /// </summary>
+    void Modify(ref ProcessingContext context);
 }
 
 public class NoOpTextModifier : ITextModifier
 {
     public string Name => "NoOpTextModifier";
     public CognitiveComplexity CognitiveCost => new(0);
-    public string ModifyText(string text)
+
+    public void Modify(ref ProcessingContext context)
     {
-        return text;
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        input.CopyTo(output);
+        context.Commit(input.Length);
     }
 }

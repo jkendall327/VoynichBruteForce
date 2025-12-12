@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -15,6 +13,9 @@ public class AnagramModifier : ITextModifier
 {
     private readonly AnagramMode _mode;
     private readonly int _seed;
+
+    // Scratch buffer for sorting words - reused to avoid allocations
+    private char[] _wordBuffer = new char[256];
 
     public string Name => _mode switch
     {
@@ -39,77 +40,89 @@ public class AnagramModifier : ITextModifier
         _seed = seed;
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new StringBuilder(text.Length);
-        var wordChars = new List<char>();
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
         var wordStart = -1;
 
-        for (var i = 0; i <= text.Length; i++)
+        for (var i = 0; i <= input.Length; i++)
         {
-            var isWordChar = i < text.Length && char.IsLetterOrDigit(text[i]);
+            var isWordChar = i < input.Length && char.IsLetterOrDigit(input[i]);
 
-            if (isWordChar)
+            if (isWordChar && wordStart < 0)
             {
-                if (wordStart < 0)
-                {
-                    wordStart = i;
-                }
-                wordChars.Add(text[i]);
+                wordStart = i;
             }
-            else
+            else if (!isWordChar && wordStart >= 0)
             {
-                if (wordChars.Count > 0)
+                var wordLength = i - wordStart;
+
+                // Ensure buffer is large enough
+                if (_wordBuffer.Length < wordLength)
                 {
-                    var anagrammed = AnagramWord(wordChars);
-                    foreach (var c in anagrammed)
-                    {
-                        result.Append(c);
-                    }
-                    wordChars.Clear();
-                    wordStart = -1;
+                    _wordBuffer = new char[wordLength * 2];
                 }
 
-                if (i < text.Length)
+                // Copy word to buffer
+                input.Slice(wordStart, wordLength).CopyTo(_wordBuffer);
+
+                // Anagram the word in the buffer
+                AnagramWord(_wordBuffer.AsSpan(0, wordLength));
+
+                // Write anagrammed word to output
+                _wordBuffer.AsSpan(0, wordLength).CopyTo(output.Slice(writeIndex));
+                writeIndex += wordLength;
+
+                wordStart = -1;
+
+                // Write the non-word character
+                if (i < input.Length)
                 {
-                    result.Append(text[i]);
+                    output[writeIndex++] = input[i];
                 }
+            }
+            else if (!isWordChar && i < input.Length)
+            {
+                // Non-word character outside a word
+                output[writeIndex++] = input[i];
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 
-    private char[] AnagramWord(List<char> chars)
+    private void AnagramWord(Span<char> chars)
     {
-        var arr = chars.ToArray();
-
         switch (_mode)
         {
             case AnagramMode.Alphabetical:
-                Array.Sort(arr, (a, b) =>
+                chars.Sort((a, b) =>
                     char.ToLowerInvariant(a).CompareTo(char.ToLowerInvariant(b)));
                 break;
 
             case AnagramMode.ReverseAlphabetical:
-                Array.Sort(arr, (a, b) =>
+                chars.Sort((a, b) =>
                     char.ToLowerInvariant(b).CompareTo(char.ToLowerInvariant(a)));
                 break;
 
             case AnagramMode.Seeded:
                 // Use a deterministic shuffle based on word content and seed
-                var wordHash = chars.Aggregate(_seed, (h, c) => h * 31 + c);
+                var wordHash = _seed;
+                for (var i = 0; i < chars.Length; i++)
+                {
+                    wordHash = wordHash * 31 + chars[i];
+                }
                 var random = new Random(wordHash);
 
-                for (var i = arr.Length - 1; i > 0; i--)
+                for (var i = chars.Length - 1; i > 0; i--)
                 {
                     var j = random.Next(i + 1);
-                    (arr[i], arr[j]) = (arr[j], arr[i]);
+                    (chars[i], chars[j]) = (chars[j], chars[i]);
                 }
                 break;
         }
-
-        return arr;
     }
 }
 

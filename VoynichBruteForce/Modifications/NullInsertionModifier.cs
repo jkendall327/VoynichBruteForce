@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -38,25 +36,25 @@ public class NullInsertionModifier : ITextModifier
         _interval = interval;
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        // Estimate capacity: original + nulls
-        var nullCount = text.Length / _interval;
-        var result = new StringBuilder(text.Length + nullCount);
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
         var count = 0;
 
-        foreach (var c in text)
+        for (var i = 0; i < input.Length; i++)
         {
-            result.Append(c);
+            output[writeIndex++] = input[i];
             count++;
 
             if (count >= _interval)
             {
-                result.Append(_nullChar);
+                output[writeIndex++] = _nullChar;
                 count = 0;
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 }

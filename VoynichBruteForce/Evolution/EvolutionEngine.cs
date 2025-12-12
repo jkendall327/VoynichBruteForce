@@ -41,7 +41,7 @@ public class EvolutionEngine(
                     var result = runner.Run(pipeline);
                     rankedResults.Add((pipeline, result));
                 });
-            
+
             // Order by lowest error (best fit)
             var sorted = rankedResults
                 .OrderBy(x => x.Result.TotalErrorScore)

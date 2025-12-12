@@ -16,13 +16,14 @@ public class AtbashCipherModifier : ITextModifier
     // Low cognitive cost - simple reversal of alphabet position
     public CognitiveComplexity CognitiveCost => new(2);
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new char[text.Length];
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
 
-        for (var i = 0; i < text.Length; i++)
+        for (var i = 0; i < input.Length; i++)
         {
-            var c = text[i];
+            var c = input[i];
 
             if (char.IsLetter(c))
             {
@@ -30,14 +31,14 @@ public class AtbashCipherModifier : ITextModifier
                 var baseChar = isUpper ? 'A' : 'a';
                 // Map 0→25, 1→24, 2→23, etc.
                 var reversed = (char)(baseChar + (25 - (c - baseChar)));
-                result[i] = reversed;
+                output[i] = reversed;
             }
             else
             {
-                result[i] = c;
+                output[i] = c;
             }
         }
 
-        return new string(result);
+        context.Commit(input.Length);
     }
 }

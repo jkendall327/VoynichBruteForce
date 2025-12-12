@@ -20,19 +20,21 @@ public class VowelRemovalModifier : ITextModifier
     // Low cognitive cost - vowels are easy to identify and skip
     public CognitiveComplexity CognitiveCost => new(1);
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new char[text.Length];
-        var index = 0;
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
 
-        foreach (var c in text)
+        for (var i = 0; i < input.Length; i++)
         {
+            var c = input[i];
             if (!Vowels.Contains(c))
             {
-                result[index++] = c;
+                output[writeIndex++] = c;
             }
         }
 
-        return new string(result, 0, index);
+        context.Commit(writeIndex);
     }
 }

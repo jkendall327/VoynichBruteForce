@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -18,14 +16,16 @@ public class WordReversalModifier : ITextModifier
     // Moderate cognitive cost - requires attention but no memorization
     public CognitiveComplexity CognitiveCost => new(3);
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new StringBuilder(text.Length);
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
         var wordStart = -1;
 
-        for (var i = 0; i <= text.Length; i++)
+        for (var i = 0; i <= input.Length; i++)
         {
-            var isWordChar = i < text.Length && char.IsLetterOrDigit(text[i]);
+            var isWordChar = i < input.Length && char.IsLetterOrDigit(input[i]);
 
             if (isWordChar && wordStart < 0)
             {
@@ -34,26 +34,26 @@ public class WordReversalModifier : ITextModifier
             }
             else if (!isWordChar && wordStart >= 0)
             {
-                // End of word - reverse and append
+                // End of word - reverse and write
                 for (var j = i - 1; j >= wordStart; j--)
                 {
-                    result.Append(text[j]);
+                    output[writeIndex++] = input[j];
                 }
                 wordStart = -1;
 
-                // Append the non-word character
-                if (i < text.Length)
+                // Write the non-word character
+                if (i < input.Length)
                 {
-                    result.Append(text[i]);
+                    output[writeIndex++] = input[i];
                 }
             }
-            else if (!isWordChar && i < text.Length)
+            else if (!isWordChar && i < input.Length)
             {
                 // Non-word character outside a word
-                result.Append(text[i]);
+                output[writeIndex++] = input[i];
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 }

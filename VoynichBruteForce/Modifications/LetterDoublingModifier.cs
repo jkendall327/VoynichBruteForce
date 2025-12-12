@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -33,21 +31,24 @@ public class LetterDoublingModifier : ITextModifier
         _lettersToDouble = lettersToDouble?.ToHashSet(CharComparer.Instance);
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new StringBuilder(text.Length * 2);
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
 
-        foreach (var c in text)
+        for (var i = 0; i < input.Length; i++)
         {
-            result.Append(c);
+            var c = input[i];
+            output[writeIndex++] = c;
 
             if (char.IsLetter(c) && ShouldDouble(c))
             {
-                result.Append(c);
+                output[writeIndex++] = c;
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 
     private bool ShouldDouble(char c)

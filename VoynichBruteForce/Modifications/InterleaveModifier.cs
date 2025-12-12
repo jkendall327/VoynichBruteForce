@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -31,89 +29,86 @@ public class InterleaveModifier : ITextModifier
         _mode = mode;
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        if (text.Length <= 1)
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+
+        if (input.Length <= 1)
         {
-            return text;
+            input.CopyTo(output);
+            context.Commit(input.Length);
+            return;
         }
 
-        return _mode switch
+        switch (_mode)
         {
-            InterleaveMode.HalvesAlternate => InterleaveHalves(text),
-            InterleaveMode.OddEvenSplit => SplitOddEven(text),
-            InterleaveMode.ReverseInterleave => InterleaveWithReverse(text),
-            _ => text
-        };
+            case InterleaveMode.HalvesAlternate:
+                InterleaveHalves(input, output, ref context);
+                break;
+            case InterleaveMode.OddEvenSplit:
+                SplitOddEven(input, output, ref context);
+                break;
+            case InterleaveMode.ReverseInterleave:
+                throw new NotImplementedException(
+                    "ReverseInterleave mode cannot use Span<char> because it doubles the text length, " +
+                    "which would require dynamic buffer resizing.");
+            default:
+                input.CopyTo(output);
+                context.Commit(input.Length);
+                break;
+        }
     }
 
     /// <summary>
     /// Splits text into two halves and interleaves them.
     /// "ABCDEF" → "ADBECF"
     /// </summary>
-    private static string InterleaveHalves(string text)
+    private static void InterleaveHalves(ReadOnlySpan<char> input, Span<char> output, ref ProcessingContext context)
     {
-        var mid = (text.Length + 1) / 2;
-        var firstHalf = text[..mid];
-        var secondHalf = text[mid..];
+        var mid = (input.Length + 1) / 2;
+        var firstHalf = input.Slice(0, mid);
+        var secondHalf = input.Slice(mid);
 
-        var result = new StringBuilder(text.Length);
+        var writeIndex = 0;
         var maxLen = Math.Max(firstHalf.Length, secondHalf.Length);
 
         for (var i = 0; i < maxLen; i++)
         {
             if (i < firstHalf.Length)
             {
-                result.Append(firstHalf[i]);
+                output[writeIndex++] = firstHalf[i];
             }
             if (i < secondHalf.Length)
             {
-                result.Append(secondHalf[i]);
+                output[writeIndex++] = secondHalf[i];
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 
     /// <summary>
     /// Takes odd-indexed characters then even-indexed characters.
     /// "ABCDEF" → "ACEBDF"
     /// </summary>
-    private static string SplitOddEven(string text)
+    private static void SplitOddEven(ReadOnlySpan<char> input, Span<char> output, ref ProcessingContext context)
     {
-        var result = new StringBuilder(text.Length);
+        var writeIndex = 0;
 
         // Even indices first (0, 2, 4...)
-        for (var i = 0; i < text.Length; i += 2)
+        for (var i = 0; i < input.Length; i += 2)
         {
-            result.Append(text[i]);
+            output[writeIndex++] = input[i];
         }
 
         // Then odd indices (1, 3, 5...)
-        for (var i = 1; i < text.Length; i += 2)
+        for (var i = 1; i < input.Length; i += 2)
         {
-            result.Append(text[i]);
+            output[writeIndex++] = input[i];
         }
 
-        return result.ToString();
-    }
-
-    /// <summary>
-    /// Interleaves text with its reverse.
-    /// "ABC" → "ACBBCA" (original interleaved with reverse)
-    /// </summary>
-    private static string InterleaveWithReverse(string text)
-    {
-        var reversed = new string(text.Reverse().ToArray());
-        var result = new StringBuilder(text.Length * 2);
-
-        for (var i = 0; i < text.Length; i++)
-        {
-            result.Append(text[i]);
-            result.Append(reversed[i]);
-        }
-
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 }
 

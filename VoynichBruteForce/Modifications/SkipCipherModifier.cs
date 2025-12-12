@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -13,6 +11,9 @@ namespace VoynichBruteForce.Modifications;
 public class SkipCipherModifier : ITextModifier
 {
     private readonly int _skip;
+
+    // Scratch buffer for tracking used positions
+    private bool[] _usedBuffer = new bool[1024];
 
     public string Name => $"SkipCipher({_skip})";
 
@@ -33,41 +34,54 @@ public class SkipCipherModifier : ITextModifier
         _skip = skip;
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        if (text.Length == 0)
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+
+        if (input.Length == 0)
         {
-            return text;
+            context.Commit(0);
+            return;
         }
 
-        var result = new StringBuilder(text.Length);
-        var used = new bool[text.Length];
+        // Ensure buffer is large enough and clear it
+        if (_usedBuffer.Length < input.Length)
+        {
+            _usedBuffer = new bool[input.Length];
+        }
+        else
+        {
+            Array.Clear(_usedBuffer, 0, input.Length);
+        }
+
+        var writeIndex = 0;
         var index = 0;
         var collected = 0;
 
-        while (collected < text.Length)
+        while (collected < input.Length)
         {
-            if (!used[index])
+            if (!_usedBuffer[index])
             {
-                result.Append(text[index]);
-                used[index] = true;
+                output[writeIndex++] = input[index];
+                _usedBuffer[index] = true;
                 collected++;
             }
 
-            index = (index + _skip) % text.Length;
+            index = (index + _skip) % input.Length;
 
             // If we've wrapped around and the current position is used,
             // find the next unused position
-            if (used[index])
+            if (_usedBuffer[index])
             {
                 var startIndex = index;
                 do
                 {
-                    index = (index + 1) % text.Length;
-                } while (used[index] && index != startIndex);
+                    index = (index + 1) % input.Length;
+                } while (_usedBuffer[index] && index != startIndex);
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 }

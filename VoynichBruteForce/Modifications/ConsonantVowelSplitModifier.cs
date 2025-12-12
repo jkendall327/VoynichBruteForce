@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -22,6 +20,11 @@ public class ConsonantVowelSplitModifier : ITextModifier
         'A', 'E', 'I', 'O', 'U'
     };
 
+    // Scratch buffers - reused to avoid allocations
+    private char[] _consonantBuffer = new char[1024];
+    private char[] _vowelBuffer = new char[1024];
+    private (int Index, char Char)[] _nonLetterBuffer = new (int, char)[256];
+
     public string Name => _consonantsFirst ? "ConsonantVowelSplit(C,V)" : "ConsonantVowelSplit(V,C)";
 
     // Low cognitive cost - simple categorization
@@ -36,69 +39,109 @@ public class ConsonantVowelSplitModifier : ITextModifier
         _consonantsFirst = consonantsFirst;
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var consonants = new StringBuilder();
-        var vowels = new StringBuilder();
-        var nonLetters = new List<(int Index, char Char)>();
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
 
-        var letterIndex = 0;
-        for (var i = 0; i < text.Length; i++)
+        // Ensure buffers are large enough
+        if (_consonantBuffer.Length < input.Length)
         {
-            var c = text[i];
+            _consonantBuffer = new char[input.Length];
+            _vowelBuffer = new char[input.Length];
+        }
+        if (_nonLetterBuffer.Length < input.Length)
+        {
+            _nonLetterBuffer = new (int, char)[input.Length];
+        }
+
+        var consonantCount = 0;
+        var vowelCount = 0;
+        var nonLetterCount = 0;
+        var letterIndex = 0;
+
+        // First pass: categorize characters
+        for (var i = 0; i < input.Length; i++)
+        {
+            var c = input[i];
             if (char.IsLetter(c))
             {
                 if (Vowels.Contains(c))
                 {
-                    vowels.Append(c);
+                    _vowelBuffer[vowelCount++] = c;
                 }
                 else
                 {
-                    consonants.Append(c);
+                    _consonantBuffer[consonantCount++] = c;
                 }
                 letterIndex++;
             }
             else
             {
-                nonLetters.Add((letterIndex, c));
+                _nonLetterBuffer[nonLetterCount++] = (letterIndex, c);
             }
         }
 
-        // Combine based on order preference
-        var letters = _consonantsFirst
-            ? consonants.ToString() + vowels.ToString()
-            : vowels.ToString() + consonants.ToString();
+        // Build combined letter sequence
+        var lettersSpan = _consonantsFirst
+            ? _consonantBuffer.AsSpan(0, consonantCount)
+            : _vowelBuffer.AsSpan(0, vowelCount);
+        var secondSpan = _consonantsFirst
+            ? _vowelBuffer.AsSpan(0, vowelCount)
+            : _consonantBuffer.AsSpan(0, consonantCount);
+
+        var totalLetters = consonantCount + vowelCount;
+
+        // If no non-letters, just copy the reordered letters
+        if (nonLetterCount == 0)
+        {
+            lettersSpan.CopyTo(output);
+            secondSpan.CopyTo(output.Slice(lettersSpan.Length));
+            context.Commit(totalLetters);
+            return;
+        }
 
         // Reinsert non-letters at their relative positions
-        if (nonLetters.Count == 0)
-        {
-            return letters;
-        }
+        var writeIndex = 0;
+        var letterPos = 0;
+        var nonLetterPos = 0;
 
-        var result = new StringBuilder(text.Length);
-        var li = 0;
-        var ni = 0;
-
-        for (var i = 0; i < text.Length; i++)
+        for (var i = 0; i < input.Length; i++)
         {
-            if (ni < nonLetters.Count && nonLetters[ni].Index == li)
+            if (nonLetterPos < nonLetterCount && _nonLetterBuffer[nonLetterPos].Index == letterPos)
             {
-                result.Append(nonLetters[ni].Char);
-                ni++;
+                output[writeIndex++] = _nonLetterBuffer[nonLetterPos].Char;
+                nonLetterPos++;
             }
-            else if (li < letters.Length)
+            else if (letterPos < totalLetters)
             {
-                result.Append(letters[li]);
-                li++;
+                // Get letter from combined sequence
+                if (letterPos < lettersSpan.Length)
+                {
+                    output[writeIndex++] = lettersSpan[letterPos];
+                }
+                else
+                {
+                    output[writeIndex++] = secondSpan[letterPos - lettersSpan.Length];
+                }
+                letterPos++;
             }
         }
 
-        // Append any remaining
-        while (li < letters.Length)
+        // Append any remaining letters
+        while (letterPos < totalLetters)
         {
-            result.Append(letters[li++]);
+            if (letterPos < lettersSpan.Length)
+            {
+                output[writeIndex++] = lettersSpan[letterPos];
+            }
+            else
+            {
+                output[writeIndex++] = secondSpan[letterPos - lettersSpan.Length];
+            }
+            letterPos++;
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 }

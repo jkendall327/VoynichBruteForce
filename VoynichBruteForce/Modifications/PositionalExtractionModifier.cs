@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -55,15 +53,16 @@ public class PositionalExtractionModifier : ITextModifier
     /// </summary>
     public static PositionalExtractionModifier Telestich() => new(0, true);
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new StringBuilder();
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
         var wordStart = -1;
-        var wordEnd = -1;
 
-        for (var i = 0; i <= text.Length; i++)
+        for (var i = 0; i <= input.Length; i++)
         {
-            var isWordChar = i < text.Length && char.IsLetterOrDigit(text[i]);
+            var isWordChar = i < input.Length && char.IsLetterOrDigit(input[i]);
 
             if (isWordChar && wordStart < 0)
             {
@@ -71,10 +70,9 @@ public class PositionalExtractionModifier : ITextModifier
             }
             else if (!isWordChar && wordStart >= 0)
             {
-                wordEnd = i;
+                var wordEnd = i;
 
                 // Extract from this word
-                var wordLength = wordEnd - wordStart;
                 int extractIndex;
 
                 if (_fromEnd)
@@ -88,13 +86,13 @@ public class PositionalExtractionModifier : ITextModifier
 
                 if (extractIndex >= wordStart && extractIndex < wordEnd)
                 {
-                    result.Append(text[extractIndex]);
+                    output[writeIndex++] = input[extractIndex];
                 }
 
                 wordStart = -1;
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 }

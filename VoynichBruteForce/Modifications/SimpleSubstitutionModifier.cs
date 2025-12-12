@@ -54,17 +54,18 @@ public class SimpleSubstitutionModifier : ITextModifier
         _keyDescription = $"{mapping.Count} mappings";
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new char[text.Length];
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
 
-        for (var i = 0; i < text.Length; i++)
+        for (var i = 0; i < input.Length; i++)
         {
-            var c = text[i];
-            result[i] = _substitutionMap.TryGetValue(c, out var mapped) ? mapped : c;
+            var c = input[i];
+            output[i] = _substitutionMap.TryGetValue(c, out var mapped) ? mapped : c;
         }
 
-        return new string(result);
+        context.Commit(input.Length);
     }
 
     /// <summary>

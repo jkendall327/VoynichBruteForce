@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -14,6 +12,9 @@ namespace VoynichBruteForce.Modifications;
 public class ColumnarTranspositionModifier : ITextModifier
 {
     private readonly int[] _columnOrder;
+
+    // Scratch buffer for grid - reused to avoid allocations
+    private char[] _gridBuffer = new char[1024];
 
     public string Name => $"ColumnarTransposition({string.Join(",", _columnOrder)})";
 
@@ -82,38 +83,51 @@ public class ColumnarTranspositionModifier : ITextModifier
         return new ColumnarTranspositionModifier(readOrder);
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+
         var numCols = _columnOrder.Length;
-        var numRows = (text.Length + numCols - 1) / numCols;
+        var numRows = (input.Length + numCols - 1) / numCols;
+        var gridSize = numRows * numCols;
 
-        // Build the grid
-        var grid = new char[numRows, numCols];
+        // Ensure buffer is large enough
+        if (_gridBuffer.Length < gridSize)
+        {
+            _gridBuffer = new char[gridSize];
+        }
+
+        // Build the grid (row-major order)
         var index = 0;
-
         for (var row = 0; row < numRows; row++)
         {
             for (var col = 0; col < numCols; col++)
             {
-                grid[row, col] = index < text.Length ? text[index++] : ' ';
+                _gridBuffer[row * numCols + col] = index < input.Length ? input[index++] : ' ';
             }
         }
 
         // Read out by columns in the specified order
-        var result = new StringBuilder(text.Length);
-
+        var writeIndex = 0;
         foreach (var col in _columnOrder)
         {
             for (var row = 0; row < numRows; row++)
             {
-                var c = grid[row, col];
-                if (c != ' ' || result.Length < text.Length)
+                var c = _gridBuffer[row * numCols + col];
+                if (c != ' ' || writeIndex < input.Length)
                 {
-                    result.Append(c);
+                    output[writeIndex++] = c;
                 }
             }
         }
 
-        return result.ToString().TrimEnd();
+        // Trim trailing spaces
+        while (writeIndex > 0 && output[writeIndex - 1] == ' ')
+        {
+            writeIndex--;
+        }
+
+        context.Commit(writeIndex);
     }
 }

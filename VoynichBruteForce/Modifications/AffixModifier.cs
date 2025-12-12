@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -16,6 +14,11 @@ public class AffixModifier : ITextModifier
     private readonly string? _prefix;
     private readonly string? _suffix;
     private readonly AffixMode _mode;
+
+    private static readonly HashSet<char> Vowels = new()
+    {
+        'a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U'
+    };
 
     public string Name => _mode switch
     {
@@ -53,14 +56,16 @@ public class AffixModifier : ITextModifier
         }
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new StringBuilder(text.Length * 2);
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
+        var writeIndex = 0;
         var wordStart = -1;
 
-        for (var i = 0; i <= text.Length; i++)
+        for (var i = 0; i <= input.Length; i++)
         {
-            var isWordChar = i < text.Length && char.IsLetterOrDigit(text[i]);
+            var isWordChar = i < input.Length && char.IsLetterOrDigit(input[i]);
 
             if (isWordChar && wordStart < 0)
             {
@@ -68,61 +73,104 @@ public class AffixModifier : ITextModifier
             }
             else if (!isWordChar && wordStart >= 0)
             {
-                var word = text[wordStart..i];
-                var transformed = TransformWord(word);
-                result.Append(transformed);
+                var wordSpan = input.Slice(wordStart, i - wordStart);
+                writeIndex = TransformWord(wordSpan, output, writeIndex);
                 wordStart = -1;
 
-                if (i < text.Length)
+                if (i < input.Length)
                 {
-                    result.Append(text[i]);
+                    output[writeIndex++] = input[i];
                 }
             }
-            else if (!isWordChar && i < text.Length)
+            else if (!isWordChar && i < input.Length)
             {
-                result.Append(text[i]);
+                output[writeIndex++] = input[i];
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 
-    private string TransformWord(string word)
+    private int TransformWord(ReadOnlySpan<char> word, Span<char> output, int writeIndex)
     {
         if (word.Length == 0)
         {
-            return word;
+            return writeIndex;
         }
 
-        return _mode switch
+        switch (_mode)
         {
-            AffixMode.AddPrefix => _prefix + word,
-            AffixMode.AddSuffix => word + _suffix,
-            AffixMode.MoveFirstToEnd => word.Length > 1
-                ? word[1..] + word[0]
-                : word,
-            AffixMode.MoveLastToStart => word.Length > 1
-                ? word[^1] + word[..^1]
-                : word,
-            AffixMode.PigLatin => ApplyPigLatin(word),
-            _ => word
-        };
+            case AffixMode.AddPrefix:
+                // Write prefix then word
+                _prefix!.CopyTo(output.Slice(writeIndex));
+                writeIndex += _prefix.Length;
+                word.CopyTo(output.Slice(writeIndex));
+                writeIndex += word.Length;
+                break;
+
+            case AffixMode.AddSuffix:
+                // Write word then suffix
+                word.CopyTo(output.Slice(writeIndex));
+                writeIndex += word.Length;
+                _suffix!.CopyTo(output.Slice(writeIndex));
+                writeIndex += _suffix.Length;
+                break;
+
+            case AffixMode.MoveFirstToEnd:
+                if (word.Length > 1)
+                {
+                    // Write chars 1..end, then first char
+                    word.Slice(1).CopyTo(output.Slice(writeIndex));
+                    writeIndex += word.Length - 1;
+                    output[writeIndex++] = word[0];
+                }
+                else
+                {
+                    word.CopyTo(output.Slice(writeIndex));
+                    writeIndex += word.Length;
+                }
+                break;
+
+            case AffixMode.MoveLastToStart:
+                if (word.Length > 1)
+                {
+                    // Write last char, then chars 0..end-1
+                    output[writeIndex++] = word[^1];
+                    word.Slice(0, word.Length - 1).CopyTo(output.Slice(writeIndex));
+                    writeIndex += word.Length - 1;
+                }
+                else
+                {
+                    word.CopyTo(output.Slice(writeIndex));
+                    writeIndex += word.Length;
+                }
+                break;
+
+            case AffixMode.PigLatin:
+                writeIndex = ApplyPigLatin(word, output, writeIndex);
+                break;
+
+            default:
+                word.CopyTo(output.Slice(writeIndex));
+                writeIndex += word.Length;
+                break;
+        }
+
+        return writeIndex;
     }
 
-    private static string ApplyPigLatin(string word)
+    private static int ApplyPigLatin(ReadOnlySpan<char> word, Span<char> output, int writeIndex)
     {
         if (word.Length == 0)
         {
-            return word;
+            return writeIndex;
         }
-
-        var vowels = new HashSet<char> { 'a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U' };
 
         // Find first vowel
         var firstVowelIndex = -1;
         for (var i = 0; i < word.Length; i++)
         {
-            if (vowels.Contains(word[i]))
+            if (Vowels.Contains(word[i]))
             {
                 firstVowelIndex = i;
                 break;
@@ -132,21 +180,48 @@ public class AffixModifier : ITextModifier
         if (firstVowelIndex <= 0)
         {
             // Word starts with vowel or has no vowels - add "ay"
-            return word + "ay";
+            word.CopyTo(output.Slice(writeIndex));
+            writeIndex += word.Length;
+            output[writeIndex++] = 'a';
+            output[writeIndex++] = 'y';
         }
-
-        // Move consonant cluster to end and add "ay"
-        var consonants = word[..firstVowelIndex];
-        var rest = word[firstVowelIndex..];
-
-        // Preserve case of first letter
-        if (char.IsUpper(word[0]) && rest.Length > 0)
+        else
         {
-            rest = char.ToUpper(rest[0]) + rest[1..];
-            consonants = char.ToLower(consonants[0]) + consonants[1..];
+            // Move consonant cluster to end and add "ay"
+            var restLength = word.Length - firstVowelIndex;
+            var consonantLength = firstVowelIndex;
+
+            // Preserve case of first letter
+            var wasFirstUpper = char.IsUpper(word[0]);
+
+            // Write rest of word (from first vowel)
+            for (var i = 0; i < restLength; i++)
+            {
+                var c = word[firstVowelIndex + i];
+                if (i == 0 && wasFirstUpper)
+                {
+                    c = char.ToUpper(c);
+                }
+                output[writeIndex++] = c;
+            }
+
+            // Write consonant cluster
+            for (var i = 0; i < consonantLength; i++)
+            {
+                var c = word[i];
+                if (i == 0 && wasFirstUpper)
+                {
+                    c = char.ToLower(c);
+                }
+                output[writeIndex++] = c;
+            }
+
+            // Add "ay"
+            output[writeIndex++] = 'a';
+            output[writeIndex++] = 'y';
         }
 
-        return rest + consonants + "ay";
+        return writeIndex;
     }
 }
 

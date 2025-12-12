@@ -35,14 +35,15 @@ public class PolyalphabeticModifier : ITextModifier
         _shifts = _keyword.Select(c => c - 'A').ToArray();
     }
 
-    public string ModifyText(string text)
+    public void Modify(ref ProcessingContext context)
     {
-        var result = new char[text.Length];
+        var input = context.InputSpan;
+        var output = context.OutputSpan;
         var keyIndex = 0;
 
-        for (var i = 0; i < text.Length; i++)
+        for (var i = 0; i < input.Length; i++)
         {
-            var c = text[i];
+            var c = input[i];
 
             if (char.IsLetter(c))
             {
@@ -50,15 +51,15 @@ public class PolyalphabeticModifier : ITextModifier
                 var baseChar = isUpper ? 'A' : 'a';
                 var shift = _shifts[keyIndex % _shifts.Length];
                 var shifted = (char)(((c - baseChar + shift) % 26) + baseChar);
-                result[i] = shifted;
+                output[i] = shifted;
                 keyIndex++;
             }
             else
             {
-                result[i] = c;
+                output[i] = c;
             }
         }
 
-        return new string(result);
+        context.Commit(input.Length);
     }
 }
