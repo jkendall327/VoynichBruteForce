@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using VoynichBruteForce.Rankings;
 
 namespace VoynichBruteForce;
 
@@ -106,7 +107,7 @@ public class DefaultGenomeFactory : IGenomeFactory
     public List<ITextModifier> Crossover(List<ITextModifier> parentA, List<ITextModifier> parentB)
     {
         // TODO: properly understand this code instead of cargo-culting it.
-        
+
         var child = new List<ITextModifier>();
         var random = new Random();
 
@@ -127,103 +128,6 @@ public class DefaultGenomeFactory : IGenomeFactory
         }
 
         return child;
-    }
-}
-
-public enum RuleWeight
-{
-    /// <summary>
-    /// Nice to have, but not a dealbreaker (e.g., exact word count). Multiplier: 0.1
-    /// </summary>
-    Trivia = 0,
-
-    /// <summary>
-    /// Standard statistical feature (e.g., Zipf's law). Multiplier: 1.0
-    /// </summary>
-    Standard = 1,
-
-    /// <summary>
-    /// Hard to fake. If this fails, the method is wrong (e.g., H2 Entropy). Multiplier: 10.0
-    /// </summary>
-    High = 2,
-
-    /// <summary>
-    /// The "Golden Standard". If this is wrong, discard immediately. Multiplier: 50.0
-    /// </summary>
-    Critical = 3
-}
-
-public static class RuleWeightExtensions
-{
-    public static double ToMultiplier(this RuleWeight weight) =>
-        weight switch
-        {
-            RuleWeight.Trivia => 0.1,
-            RuleWeight.Standard => 1.0,
-            RuleWeight.High => 10.0,
-            RuleWeight.Critical => 50.0,
-            _ => 1.0
-        };
-}
-
-/// <summary>
-/// Measures how closely a given text adheres to a rule of some kind.
-/// These are typically statistical rules like Zipf's law.
-/// </summary>
-public interface IRuleAdherenceRanker
-{
-    string Name { get; }
-
-    /// <summary>
-    /// How important this ranking is to emulating the overall profile of the Voynich.
-    /// Some features, like low H2 entropy, are strikingly unique to the text, and hence are important to replicate.
-    /// </summary>
-    RuleWeight Weight { get; }
-
-    RankerResult CalculateRank(string text);
-}
-
-public record RankerResult(
-    string RuleName,
-    double RawMeasuredValue, // e.g. 3.5 bits
-    double TargetValue, // e.g. 2.0 bits
-    double NormalizedError, // e.g. 1.5 (Standardized deviation)
-    RuleWeight Weight // Carried through for the final sum
-);
-
-public interface IRankerProvider
-{
-    List<IRuleAdherenceRanker> GetRankers();
-}
-
-public class ConditionalEntropyRanker : IRuleAdherenceRanker
-{
-    public string Name => "H2 Entropy";
-
-    // This is critical because low H2 is the Voynich's defining feature
-    public RuleWeight Weight => RuleWeight.Critical;
-
-    public RankerResult CalculateRank(string text)
-    {
-        var actualH2 = ComputeH2(text);
-
-        var rawDelta = Math.Abs(actualH2 - VoynichConstants.TargetH2Entropy);
-
-        // NORMALIZATION LOGIC:
-        // We decide that being off by 0.5 bits is a "Full Error Unit" (1.0).
-        // Being off by 1.0 bit is 2.0 error units (or 4.0 if we square it).
-        var tolerance = 0.5;
-        var normalizedError = rawDelta / tolerance;
-
-        // Optional: Square the error to punish large deviations more severely
-        normalizedError = Math.Pow(normalizedError, 2);
-
-        return new(Name, actualH2, VoynichConstants.TargetH2Entropy, normalizedError, Weight);
-    }
-
-    private double ComputeH2(string text)
-    {
-        throw new NotImplementedException();
     }
 }
 
