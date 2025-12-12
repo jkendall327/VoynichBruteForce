@@ -29,7 +29,7 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
             var result = ranker.CalculateRank(sourceText);
 
             results.Add(result);
-            
+
             logger.LogTrace("{RankingMethod}: {Error}", ranker.Name, result);
         }
 
