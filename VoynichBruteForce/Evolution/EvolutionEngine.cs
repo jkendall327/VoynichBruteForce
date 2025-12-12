@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using VoynichBruteForce.Sources;
 
@@ -31,16 +32,16 @@ public class EvolutionEngine(
 
         for (var gen = 0; gen < MaxGenerations; gen++)
         {
-            var rankedResults = new List<(Pipeline Pipeline, PipelineResult Result)>();
+            var rankedResults = new ConcurrentBag<(Pipeline Pipeline, PipelineResult Result)>();
 
             // 2. Evaluate Fitness
-            foreach (var creature in population)
-            {
-                var result = runner.Run(creature);
-
-                rankedResults.Add((creature, result));
-            }
-
+            Parallel.ForEach(population,
+                pipeline =>
+                {
+                    var result = runner.Run(pipeline);
+                    rankedResults.Add((pipeline, result));
+                });
+            
             // Order by lowest error (best fit)
             var sorted = rankedResults
                 .OrderBy(x => x.Result.TotalErrorScore)
