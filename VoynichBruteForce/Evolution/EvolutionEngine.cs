@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -42,20 +41,20 @@ public partial class EvolutionEngine(
 
         for (var gen = 0; gen < _hyperparameters.MaxGenerations; gen++)
         {
-            var rankedResults = new ConcurrentBag<(Genome Genome, PipelineResult Result)>();
+            var rankedResults = new (Genome Genome, PipelineResult Result)[population.Count];
 
             var start = Stopwatch.GetTimestamp();
 
             // 2. Evaluate Fitness
-            Parallel.ForEach(population,
-                genome =>
-                {
-                    // Resolve genome to pipeline at evaluation time
-                    var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
-                    var pipeline = new Pipeline(sourceText, genome.Modifiers);
-                    var result = runner.Run(pipeline, genome.SourceTextId);
-                    rankedResults.Add((genome, result));
-                });
+            Parallel.For(0, population.Count, i =>
+            {
+                var genome = population[i];
+                // Resolve genome to pipeline at evaluation time
+                var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
+                var pipeline = new Pipeline(sourceText, genome.Modifiers);
+                var result = runner.Run(pipeline, genome.SourceTextId);
+                rankedResults[i] = (genome, result);
+            });
 
             var elapsed = Stopwatch.GetElapsedTime(start);
 

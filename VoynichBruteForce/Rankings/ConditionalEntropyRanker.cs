@@ -39,10 +39,8 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
         var bigramCounts = new Dictionary<char, Dictionary<char, int>>();
         var charCounts = new Dictionary<char, int>();
 
-        // Normalize text and filter whitespace
-        var cleanedText = new string(text.Where(c => !char.IsWhiteSpace(c))
-                                         .Select(char.ToLowerInvariant)
-                                         .ToArray());
+        // Normalize text and filter whitespace using Span to avoid LINQ allocations
+        var cleanedText = CleanText(text);
 
         if (cleanedText.Length < 2)
             return 0;
@@ -91,5 +89,30 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
         }
 
         return h2;
+    }
+
+    private static string CleanText(string text)
+    {
+        // First pass: count non-whitespace characters
+        var count = 0;
+        foreach (var c in text)
+        {
+            if (!char.IsWhiteSpace(c))
+                count++;
+        }
+
+        if (count == 0)
+            return string.Empty;
+
+        // Allocate exact size and fill with lowercased chars
+        Span<char> buffer = count <= 256 ? stackalloc char[count] : new char[count];
+        var index = 0;
+        foreach (var c in text)
+        {
+            if (!char.IsWhiteSpace(c))
+                buffer[index++] = char.ToLowerInvariant(c);
+        }
+
+        return new string(buffer);
     }
 }
