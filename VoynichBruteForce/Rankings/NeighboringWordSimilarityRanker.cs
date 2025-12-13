@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+
 namespace VoynichBruteForce.Rankings;
 
 /// <summary>
@@ -5,8 +7,10 @@ namespace VoynichBruteForce.Rankings;
 /// The Voynich Manuscript shows unusual patterns of similar adjacent words.
 /// Lower distance means words are more similar.
 /// </summary>
-public class NeighboringWordSimilarityRanker : IRuleAdherenceRanker
+public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRanker
 {
+    private readonly VoynichProfile _profile = profile.Value;
+
     public string Name => "Neighboring Word Similarity";
 
     public RuleWeight Weight => RuleWeight.Standard;
@@ -17,7 +21,7 @@ public class NeighboringWordSimilarityRanker : IRuleAdherenceRanker
 
         if (words.Length < 2)
         {
-            return new(Name, 0, VoynichConstants.TargetNeighboringWordSimilarity, 0, Weight);
+            return new(Name, 0, _profile.TargetNeighboringWordSimilarity, 0, Weight);
         }
 
         int similarPairCount = 0;
@@ -39,13 +43,13 @@ public class NeighboringWordSimilarityRanker : IRuleAdherenceRanker
         }
 
         double similarityRatio = (double)similarPairCount / totalPairs;
-        double rawDelta = Math.Abs(similarityRatio - VoynichConstants.TargetNeighboringWordSimilarity);
+        double rawDelta = Math.Abs(similarityRatio - _profile.TargetNeighboringWordSimilarity);
 
         // Normalize: 0.05 (5% deviation) is one error unit
         double tolerance = 0.05;
         double normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
-        return new(Name, similarityRatio, VoynichConstants.TargetNeighboringWordSimilarity, normalizedError, Weight);
+        return new(Name, similarityRatio, _profile.TargetNeighboringWordSimilarity, normalizedError, Weight);
     }
 
     private int LevenshteinDistance(string source, string target)

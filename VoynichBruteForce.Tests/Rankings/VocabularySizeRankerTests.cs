@@ -1,13 +1,16 @@
+using Microsoft.Extensions.Options;
 using VoynichBruteForce.Rankings;
 
 namespace VoynichBruteForce.Tests.Rankings;
 
 public class VocabularySizeRankerTests
 {
+    private static VocabularySizeRanker CreateRanker() => new(Options.Create(new VoynichProfile()));
+
     [Fact]
     public void CalculateRank_WithAllUniqueWords_ReturnsOne()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("the quick brown fox");
 
@@ -18,7 +21,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_WithAllSameWord_ReturnsLowRatio()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("word word word word");
 
@@ -29,7 +32,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_WithMixedRepetition_CalculatesCorrectly()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("the cat and the dog and the bird");
 
@@ -42,7 +45,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_IsCaseInsensitive()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("Hello HELLO hello HeLLo");
 
@@ -53,7 +56,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_WithEmptyString_ReturnsZero()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("");
 
@@ -63,7 +66,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_WithSingleWord_ReturnsOne()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("hello");
 
@@ -74,7 +77,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_HandlesMultipleWhitespaceTypes()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("word\tcat\ndog\rword");
 
@@ -85,7 +88,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_ReturnsCorrectRuleName()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("test words");
 
@@ -95,17 +98,17 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_ReturnsTargetValue()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("test words");
 
-        Assert.Equal(VoynichConstants.TargetTypeTokenRatio, result.TargetValue);
+        Assert.Equal(new VoynichProfile().TargetTypeTokenRatio, result.TargetValue);
     }
 
     [Fact]
     public void CalculateRank_CalculatesNormalizedError()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("the quick brown fox");
 
@@ -117,7 +120,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void Weight_ReturnsStandard()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         Assert.Equal(RuleWeight.Standard, ranker.Weight);
     }
@@ -125,7 +128,7 @@ public class VocabularySizeRankerTests
     [Fact]
     public void CalculateRank_LowTTRIndicatesRepetition()
     {
-        var ranker = new VocabularySizeRanker();
+        var ranker = CreateRanker();
 
         // Voynich-like text with lots of repetition
         var result = ranker.CalculateRank("daiin daiin ol ol chol chol daiin");

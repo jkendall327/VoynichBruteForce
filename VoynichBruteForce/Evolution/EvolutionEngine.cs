@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
@@ -8,39 +9,35 @@ public partial class EvolutionEngine(
     PipelineRunner runner,
     ISourceTextRegistry sourceTextRegistry,
     IGenomeFactory genomeFactory,
+    IOptions<Hyperparameters> hyperparameters,
     ILogger<EvolutionEngine> logger)
 {
-    private const int PopulationSize = 100;
-
-    private const int MaxGenerations = 1000;
-
-    // 40% chance that a child formed by crossover also gets a random mutation
-    private const double MutationRate = 0.4;
+    private readonly Hyperparameters _hyperparameters = hyperparameters.Value;
 
     public void Evolve(int seed)
     {
         using var evolutionScope = logger.BeginScope(new Dictionary<string, object>
         {
             ["Seed"] = seed,
-            ["PopulationSize"] = PopulationSize,
-            ["MaxGenerations"] = MaxGenerations,
-            ["MutationRate"] = MutationRate
+            ["PopulationSize"] = _hyperparameters.PopulationSize,
+            ["MaxGenerations"] = _hyperparameters.MaxGenerations,
+            ["MutationRate"] = _hyperparameters.MutationRate
         });
 
-        LogEvolutionStarted(logger, seed, PopulationSize, MaxGenerations, sourceTextRegistry.AvailableIds.Count);
+        LogEvolutionStarted(logger, seed, _hyperparameters.PopulationSize, _hyperparameters.MaxGenerations, sourceTextRegistry.AvailableIds.Count);
 
         // 1. Initialize Population (Gen 0)
         var population = new List<Genome>();
 
-        for (var i = 0; i < PopulationSize; i++)
+        for (var i = 0; i < _hyperparameters.PopulationSize; i++)
         {
             var genome = genomeFactory.CreateRandomGenome(modifierCount: 5);
             population.Add(genome);
         }
 
-        LogPopulationInitialized(logger, PopulationSize);
+        LogPopulationInitialized(logger, _hyperparameters.PopulationSize);
 
-        for (var gen = 0; gen < MaxGenerations; gen++)
+        for (var gen = 0; gen < _hyperparameters.MaxGenerations; gen++)
         {
             var rankedResults = new ConcurrentBag<(Genome Genome, PipelineResult Result)>();
 
@@ -87,17 +84,17 @@ public partial class EvolutionEngine(
 
             // Elitism: Keep the top 10% unchanged
             nextGen.AddRange(sorted
-                .Take(PopulationSize / 10)
+                .Take(_hyperparameters.PopulationSize / 10)
                 .Select(x => x.Genome));
 
             // Fill the rest with mutations of the top 50%
             var survivors = sorted
-                .Take(PopulationSize / 2)
+                .Take(_hyperparameters.PopulationSize / 2)
                 .ToList();
 
             var random = new Random(seed + gen); // Ensure randomness varies per gen
 
-            while (nextGen.Count < PopulationSize)
+            while (nextGen.Count < _hyperparameters.PopulationSize)
             {
                 // STEP A: Select two distinctive parents
                 // (Using random selection from the top 50% is a simple, effective strategy)
@@ -121,7 +118,7 @@ public partial class EvolutionEngine(
                 // STEP C: Mutation (The "Spark" of novelty)
                 // Crossover rearranges existing solutions. Mutation finds new ones.
                 // We apply mutation probabilistically.
-                if (random.NextDouble() < MutationRate)
+                if (random.NextDouble() < _hyperparameters.MutationRate)
                 {
                     child = genomeFactory.Mutate(child);
                 }
@@ -132,7 +129,7 @@ public partial class EvolutionEngine(
             population = nextGen;
         }
 
-        LogEvolutionCompleted(logger, MaxGenerations);
+        LogEvolutionCompleted(logger, _hyperparameters.MaxGenerations);
     }
 
     [LoggerMessage(LogLevel.Information, "Starting evolution: Seed={Seed}, Population={PopulationSize}, MaxGen={MaxGenerations}, AvailableSourceTexts={SourceTextCount}")]

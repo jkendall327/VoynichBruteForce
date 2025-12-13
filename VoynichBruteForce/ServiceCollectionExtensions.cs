@@ -29,5 +29,15 @@ public static class ServiceCollectionExtensions
             .AddOptions<AppSettings>()
             .Bind(configuration.GetSection(AppSettings.SectionName))
             .ValidateOnStart();
+
+        services
+            .AddOptions<VoynichProfile>()
+            .Bind(configuration.GetSection(VoynichProfile.SectionName))
+            .ValidateOnStart();
+
+        services
+            .AddOptions<Hyperparameters>()
+            .Bind(configuration.GetSection(Hyperparameters.SectionName))
+            .ValidateOnStart();
     }
 }

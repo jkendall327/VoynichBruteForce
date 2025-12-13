@@ -27,7 +27,7 @@ public class PipelineResult
     /// </summary>
     public List<RankerResult> Results { get; set; }
 
-    public PipelineResult(SourceTextId sourceTextId, List<ITextModifier> modifiers, List<RankerResult> results)
+    public PipelineResult(SourceTextId sourceTextId, List<ITextModifier> modifiers, List<RankerResult> results, Hyperparameters hyperparameters)
     {
         Results = results;
         PipelineDescription = $"[{sourceTextId}] " + string.Join(" -> ", modifiers.Select(m => m.Name));
@@ -45,13 +45,13 @@ public class PipelineResult
          */
 
         // Apply a soft penalty.
-        if (cognitiveLoad > CognitiveComplexity.SoftWallComplexity)
+        if (cognitiveLoad > hyperparameters.SoftWallComplexity)
         {
             initialError *= 2.0;
         }
 
         // Apply a hard wall - arbitrarily decide this was too much for the original authors.
-        if (cognitiveLoad > CognitiveComplexity.HardWallComplexity)
+        if (cognitiveLoad > hyperparameters.HardWallComplexity)
         {
             initialError += 1000;
         }

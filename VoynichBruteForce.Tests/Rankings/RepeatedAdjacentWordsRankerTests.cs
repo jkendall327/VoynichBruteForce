@@ -1,13 +1,16 @@
+using Microsoft.Extensions.Options;
 using VoynichBruteForce.Rankings;
 
 namespace VoynichBruteForce.Tests.Rankings;
 
 public class RepeatedAdjacentWordsRankerTests
 {
+    private static RepeatedAdjacentWordsRanker CreateRanker() => new(Options.Create(new VoynichProfile()));
+
     [Fact]
     public void CalculateRank_WithNoRepetitions_ReturnsZeroRatio()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("the quick brown fox jumps over lazy dog");
 
@@ -17,7 +20,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_WithOneRepetition_CalculatesCorrectRatio()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         // "the the" is one repetition out of 4 words = 1/4 = 0.25
         var result = ranker.CalculateRank("the the cat dog");
@@ -28,7 +31,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_WithMultipleRepetitions_CalculatesCorrectRatio()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         // "word word" and "test test" = 2 repetitions out of 6 words = 2/6 ≈ 0.333
         var result = ranker.CalculateRank("word word test test hello world");
@@ -39,7 +42,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_IsCaseInsensitive()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("The THE cat CAT");
 
@@ -50,7 +53,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_WithEmptyString_ReturnsZero()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("");
 
@@ -60,7 +63,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_WithSingleWord_ReturnsZero()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("hello");
 
@@ -70,7 +73,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_HandlesMultipleWhitespaceTypes()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("word\tword\ntest\rtest");
 
@@ -81,7 +84,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_ReturnsCorrectRuleName()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("test test");
 
@@ -91,17 +94,17 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void CalculateRank_ReturnsTargetValue()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("test test");
 
-        Assert.Equal(VoynichConstants.TargetRepeatedAdjacentWordsRatio, result.TargetValue);
+        Assert.Equal(new VoynichProfile().TargetRepeatedAdjacentWordsRatio, result.TargetValue);
     }
 
     [Fact]
     public void CalculateRank_CalculatesNormalizedError()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         var result = ranker.CalculateRank("word word word"); // 2/3 ≈ 0.667
 
@@ -112,7 +115,7 @@ public class RepeatedAdjacentWordsRankerTests
     [Fact]
     public void Weight_ReturnsStandard()
     {
-        var ranker = new RepeatedAdjacentWordsRanker();
+        var ranker = CreateRanker();
 
         Assert.Equal(RuleWeight.Standard, ranker.Weight);
     }

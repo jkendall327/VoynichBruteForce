@@ -1,7 +1,11 @@
+using Microsoft.Extensions.Options;
+
 namespace VoynichBruteForce.Rankings;
 
-public class ConditionalEntropyRanker : IRuleAdherenceRanker
+public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRanker
 {
+    private readonly VoynichProfile _profile = profile.Value;
+
     public string Name => "H2 Entropy";
 
     // This is critical because low H2 is the Voynich's defining feature
@@ -11,7 +15,7 @@ public class ConditionalEntropyRanker : IRuleAdherenceRanker
     {
         var actualH2 = ComputeH2(text);
 
-        var rawDelta = Math.Abs(actualH2 - VoynichConstants.TargetH2Entropy);
+        var rawDelta = Math.Abs(actualH2 - _profile.TargetH2Entropy);
 
         // NORMALIZATION LOGIC:
         // We decide that being off by 0.5 bits is a "Full Error Unit" (1.0).
@@ -22,7 +26,7 @@ public class ConditionalEntropyRanker : IRuleAdherenceRanker
         // Optional: Square the error to punish large deviations more severely
         normalizedError = Math.Pow(normalizedError, 2);
 
-        return new(Name, actualH2, VoynichConstants.TargetH2Entropy, normalizedError, Weight);
+        return new(Name, actualH2, _profile.TargetH2Entropy, normalizedError, Weight);
     }
 
     private double ComputeH2(string text)

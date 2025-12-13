@@ -1,11 +1,15 @@
+using Microsoft.Extensions.Options;
+
 namespace VoynichBruteForce.Rankings;
 
 /// <summary>
 /// Measures the frequency of repeated adjacent words in the text.
 /// The Voynich Manuscript exhibits unusual patterns of word repetition.
 /// </summary>
-public class RepeatedAdjacentWordsRanker : IRuleAdherenceRanker
+public class RepeatedAdjacentWordsRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRanker
 {
+    private readonly VoynichProfile _profile = profile.Value;
+
     public string Name => "Repeated Adjacent Words";
 
     public RuleWeight Weight => RuleWeight.Standard;
@@ -16,7 +20,7 @@ public class RepeatedAdjacentWordsRanker : IRuleAdherenceRanker
 
         if (words.Length < 2)
         {
-            return new(Name, 0, VoynichConstants.TargetRepeatedAdjacentWordsRatio, 0, Weight);
+            return new(Name, 0, _profile.TargetRepeatedAdjacentWordsRatio, 0, Weight);
         }
 
         int repetitionCount = 0;
@@ -29,12 +33,12 @@ public class RepeatedAdjacentWordsRanker : IRuleAdherenceRanker
         }
 
         double repetitionRatio = (double)repetitionCount / words.Length;
-        double rawDelta = Math.Abs(repetitionRatio - VoynichConstants.TargetRepeatedAdjacentWordsRatio);
+        double rawDelta = Math.Abs(repetitionRatio - _profile.TargetRepeatedAdjacentWordsRatio);
 
         // Normalize: 0.05 (5% deviation) is one error unit
         double tolerance = 0.05;
         double normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
-        return new(Name, repetitionRatio, VoynichConstants.TargetRepeatedAdjacentWordsRatio, normalizedError, Weight);
+        return new(Name, repetitionRatio, _profile.TargetRepeatedAdjacentWordsRatio, normalizedError, Weight);
     }
 }

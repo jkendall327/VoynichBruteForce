@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+
 namespace VoynichBruteForce.Rankings;
 
 /// <summary>
@@ -5,8 +7,10 @@ namespace VoynichBruteForce.Rankings;
 /// Zipf's law states that frequency is inversely proportional to rank (f ∝ 1/r).
 /// The Voynich Manuscript notably adheres to Zipf's Law.
 /// </summary>
-public class ZipfLawRanker : IRuleAdherenceRanker
+public class ZipfLawRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRanker
 {
+    private readonly VoynichProfile _profile = profile.Value;
+
     public string Name => "Zipf's Law";
 
     public RuleWeight Weight => RuleWeight.High;
@@ -17,7 +21,7 @@ public class ZipfLawRanker : IRuleAdherenceRanker
 
         if (words.Length < 10)
         {
-            return new(Name, 0, VoynichConstants.TargetZipfSlope, double.MaxValue, Weight);
+            return new(Name, 0, _profile.TargetZipfSlope, double.MaxValue, Weight);
         }
 
         // Count word frequencies
@@ -41,13 +45,13 @@ public class ZipfLawRanker : IRuleAdherenceRanker
         // For ideal Zipf: α ≈ 1.0
         double slope = CalculateLogLogSlope(sortedFrequencies);
 
-        double rawDelta = Math.Abs(slope - VoynichConstants.TargetZipfSlope);
+        double rawDelta = Math.Abs(slope - _profile.TargetZipfSlope);
 
         // Normalize: 0.2 deviation in slope is one error unit
         double tolerance = 0.2;
         double normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
-        return new(Name, slope, VoynichConstants.TargetZipfSlope, normalizedError, Weight);
+        return new(Name, slope, _profile.TargetZipfSlope, normalizedError, Weight);
     }
 
     private double CalculateLogLogSlope(List<int> sortedFrequencies)

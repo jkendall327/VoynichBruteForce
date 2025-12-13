@@ -1,11 +1,15 @@
+using Microsoft.Extensions.Options;
+
 namespace VoynichBruteForce.Rankings;
 
 /// <summary>
 /// Measures the correlation between word length and word frequency.
 /// Natural languages typically show negative correlation (shorter words are more frequent).
 /// </summary>
-public class WordLengthFrequencyRanker : IRuleAdherenceRanker
+public class WordLengthFrequencyRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRanker
 {
+    private readonly VoynichProfile _profile = profile.Value;
+
     public string Name => "Word Length-Frequency Correlation";
 
     public RuleWeight Weight => RuleWeight.Standard;
@@ -16,7 +20,7 @@ public class WordLengthFrequencyRanker : IRuleAdherenceRanker
 
         if (words.Length < 10)
         {
-            return new(Name, 0, VoynichConstants.TargetWordLengthFrequencyCorrelation, double.MaxValue, Weight);
+            return new(Name, 0, _profile.TargetWordLengthFrequencyCorrelation, double.MaxValue, Weight);
         }
 
         // Count word frequencies
@@ -36,13 +40,13 @@ public class WordLengthFrequencyRanker : IRuleAdherenceRanker
 
         double correlation = CalculatePearsonCorrelation(dataPoints);
 
-        double rawDelta = Math.Abs(correlation - VoynichConstants.TargetWordLengthFrequencyCorrelation);
+        double rawDelta = Math.Abs(correlation - _profile.TargetWordLengthFrequencyCorrelation);
 
         // Normalize: 0.2 deviation in correlation is one error unit
         double tolerance = 0.2;
         double normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
-        return new(Name, correlation, VoynichConstants.TargetWordLengthFrequencyCorrelation, normalizedError, Weight);
+        return new(Name, correlation, _profile.TargetWordLengthFrequencyCorrelation, normalizedError, Weight);
     }
 
     private double CalculatePearsonCorrelation(List<(double Length, double Frequency)> dataPoints)
