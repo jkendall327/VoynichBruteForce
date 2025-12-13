@@ -93,6 +93,6 @@ public partial class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyp
     [LoggerMessage(LogLevel.Debug, "Text transformed: {sourceLength} -> {resultLength} chars")]
     static partial void LogTextTransformed(ILogger<PipelineRunner> logger, int sourceLength, int resultLength);
 
-    [LoggerMessage(LogLevel.Debug, "Degenerate text detected: {length} chars (minimum 100)")]
+    [LoggerMessage(LogLevel.Warning, "Degenerate text detected: {length} chars (minimum 100)")]
     static partial void LogDegenerateTextDetected(ILogger<PipelineRunner> logger, int length);
 }
