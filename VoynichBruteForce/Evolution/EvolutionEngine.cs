@@ -4,7 +4,7 @@ using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
 
-public class EvolutionEngine(
+public partial class EvolutionEngine(
     PipelineRunner runner,
     ITextProvider textProvider,
     IGenomeFactory genomeFactory,
@@ -49,10 +49,7 @@ public class EvolutionEngine(
 
             var best = sorted.First();
 
-            logger.LogInformation("Gen {Gen} Best: {Desc} | Error: {Err}",
-                gen,
-                best.Result.PipelineDescription,
-                best.Result.TotalErrorScore);
+            LogGenerationInfo(logger, gen, best.Result.PipelineDescription, best.Result.TotalErrorScore);
 
             if (best.Result.TotalErrorScore < 0.05)
             {
@@ -110,4 +107,7 @@ public class EvolutionEngine(
             population = nextGen;
         }
     }
+
+    [LoggerMessage(LogLevel.Information, "Gen {gen} Best: {desc} | Error: {err}")]
+    static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger, int gen, string desc, double err);
 }
