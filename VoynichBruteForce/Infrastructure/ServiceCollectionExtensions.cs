@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGenomeFactory, DefaultGenomeFactory>();
         services.AddSingleton<ISourceTextRegistry, DefaultSourceTextRegistry>();
         services.AddSingleton<IRankerProvider, DefaultRankerProvider>();
+        services.AddSingleton<RandomFactory>();
         services.AddSingleton<PipelineRunner>();
         services.AddSingleton<EvolutionEngine>();
     }

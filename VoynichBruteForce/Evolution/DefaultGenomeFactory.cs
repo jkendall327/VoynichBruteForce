@@ -5,24 +5,8 @@ using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
 
-public enum MutationStrategy
-{
-    Add,
-    Remove,
-    Swap,
-    Replace,
-    Perturb
-}
-
-public enum MutationTarget
-{
-    Source,
-    Modifiers,
-    Both
-}
-
 public partial class DefaultGenomeFactory(
-    IOptions<AppSettings> options,
+    RandomFactory randomFactory,
     ISourceTextRegistry sourceTextRegistry,
     ILogger<DefaultGenomeFactory> logger) : IGenomeFactory
 {
@@ -45,7 +29,7 @@ public partial class DefaultGenomeFactory(
 
     public Genome CreateRandomGenome(int modifierCount)
     {
-        var random = new Random(options.Value.Seed);
+        var random = randomFactory.GetRandom();
 
         var sourceTextId = sourceTextRegistry.GetRandomId(random);
         var modifiers = CreateRandomModifiers(random, modifierCount);
@@ -55,9 +39,8 @@ public partial class DefaultGenomeFactory(
 
     public Genome Mutate(Genome original)
     {
-        var random = new Random(options.Value.Seed);
+        var random = randomFactory.GetRandom();
 
-        // Decide what to mutate: 0=modifiers only, 1=source only, 2=both
         var mutationTarget = random.RandomEnumMember<MutationTarget>();
 
         var newSourceTextId = original.SourceTextId;
@@ -82,7 +65,7 @@ public partial class DefaultGenomeFactory(
 
     public Genome Crossover(Genome parentA, Genome parentB)
     {
-        var random = new Random(options.Value.Seed);
+        var random = randomFactory.GetRandom();
 
         // Source text: 50/50 uniform crossover (standard for categorical genes)
         var childSourceTextId = random.Next(2) == 0 ? parentA.SourceTextId : parentB.SourceTextId;
