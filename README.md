@@ -101,10 +101,10 @@ mine.
   could be mitigated by analysing smaller textual segments independently.
 
 - **Cognitive economy.**  
-  The creators of the VMS were constrained by cognitive complexity and did not choose arbitrarily complex methods when
-  simpler ones achieved the same result. (Indeed, we can assume that even if they wanted to, there was a psychological
-  limit to how much complexity their method could involve before regularly making mistakes, which we do not witness in
-  the text itself). Accordingly, unnecessary complexity is penalised by the genetic algorithm.
+  The creators of the VMS did not choose arbitrarily complex methods when simpler ones achieved the same result. Indeed,
+  we can assume that even if they wanted to, there was a psychological limit to how much complexity their method could
+  involve before regularly making mistakes, which we do not witness in the text itself. Accordingly, unnecessary
+  complexity is penalised by the genetic algorithm.
 
 - **Transliteration reliability.**  
   Existing transliterations of the Voynich are broadly accurate. A fundamentally incorrect transliteration scheme would
@@ -119,6 +119,6 @@ mine.
   the program doesn't test for a given language (e.g. Chinese, Mongolian), it's purely due to a lack of effort on my
   part, not a predisposition against those options.
 
-### License
+## License
 
 MIT license. Contributions are welcome.
