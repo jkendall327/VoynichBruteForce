@@ -24,13 +24,24 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
             return new(Name, 0, _profile.TargetNeighboringWordSimilarity, 0, Weight);
         }
 
-        int similarPairCount = 0;
-        int totalPairs = 0;
+        // Only sample 500 pairs max to speed up evolution.
+        var step = Math.Max(1, words.Length / 500);
 
-        for (int i = 1; i < words.Length; i++)
+        var similarPairCount = 0;
+        var totalPairs = 0;
+
+        for (var i = 1; i < words.Length; i += step)
         {
-            int distance = LevenshteinDistance(words[i - 1], words[i]);
-            int maxLength = Math.Max(words[i - 1].Length, words[i].Length);
+            // Distinct lengths cannot be distance <= 2 if diff > 2
+            if (Math.Abs(words[i].Length - words[i - 1].Length) > 2)
+            {
+                totalPairs++;
+
+                continue;
+            }
+
+            var distance = LevenshteinDistance(words[i - 1], words[i]);
+            var maxLength = Math.Max(words[i - 1].Length, words[i].Length);
 
             // Normalize distance by max word length to get similarity ratio
             // Similar words have distance <= 2 (one or two character changes)
@@ -42,12 +53,12 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
             totalPairs++;
         }
 
-        double similarityRatio = (double)similarPairCount / totalPairs;
-        double rawDelta = Math.Abs(similarityRatio - _profile.TargetNeighboringWordSimilarity);
+        var similarityRatio = (double) similarPairCount / totalPairs;
+        var rawDelta = Math.Abs(similarityRatio - _profile.TargetNeighboringWordSimilarity);
 
         // Normalize: 0.05 (5% deviation) is one error unit
-        double tolerance = 0.05;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+        var tolerance = 0.05;
+        var normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
         return new(Name, similarityRatio, _profile.TargetNeighboringWordSimilarity, normalizedError, Weight);
     }
@@ -55,33 +66,40 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
     private int LevenshteinDistance(string source, string target)
     {
         if (string.IsNullOrEmpty(source))
+        {
             return target?.Length ?? 0;
+        }
 
         if (string.IsNullOrEmpty(target))
+        {
             return source.Length;
+        }
 
-        int n = source.Length;
-        int m = target.Length;
-        int[,] distance = new int[n + 1, m + 1];
+        var n = source.Length;
+        var m = target.Length;
+        var distance = new int[n + 1, m + 1];
 
         // Initialize first column and row
-        for (int i = 0; i <= n; i++)
+        for (var i = 0; i <= n; i++)
+        {
             distance[i, 0] = i;
+        }
 
-        for (int j = 0; j <= m; j++)
+        for (var j = 0; j <= m; j++)
+        {
             distance[0, j] = j;
+        }
 
         // Calculate distances
-        for (int i = 1; i <= n; i++)
+        for (var i = 1; i <= n; i++)
         {
-            for (int j = 1; j <= m; j++)
+            for (var j = 1; j <= m; j++)
             {
-                int cost = (source[i - 1] == target[j - 1]) ? 0 : 1;
+                var cost = (source[i - 1] == target[j - 1]) ? 0 : 1;
 
-                distance[i, j] = Math.Min(
-                    Math.Min(distance[i - 1, j] + 1,      // deletion
-                             distance[i, j - 1] + 1),     // insertion
-                    distance[i - 1, j - 1] + cost);       // substitution
+                distance[i, j] = Math.Min(Math.Min(distance[i - 1, j] + 1, // deletion
+                        distance[i, j - 1] + 1), // insertion
+                    distance[i - 1, j - 1] + cost); // substitution
             }
         }
 
