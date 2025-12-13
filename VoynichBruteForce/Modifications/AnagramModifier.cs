@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -13,9 +15,6 @@ public class AnagramModifier : ISpanTextModifier
 {
     private readonly AnagramMode _mode;
     private readonly int _seed;
-
-    // Scratch buffer for sorting words - reused to avoid allocations
-    private char[] _wordBuffer = new char[256];
 
     public string Name => _mode switch
     {
@@ -49,47 +48,49 @@ public class AnagramModifier : ISpanTextModifier
         var writeIndex = 0;
         var wordStart = -1;
 
-        for (var i = 0; i <= input.Length; i++)
+        var wordBuffer = ArrayPool<char>.Shared.Rent(Math.Max(256, input.Length));
+        try
         {
-            var isWordChar = i < input.Length && char.IsLetterOrDigit(input[i]);
-
-            if (isWordChar && wordStart < 0)
+            for (var i = 0; i <= input.Length; i++)
             {
-                wordStart = i;
-            }
-            else if (!isWordChar && wordStart >= 0)
-            {
-                var wordLength = i - wordStart;
+                var isWordChar = i < input.Length && char.IsLetterOrDigit(input[i]);
 
-                // Ensure buffer is large enough
-                if (_wordBuffer.Length < wordLength)
+                if (isWordChar && wordStart < 0)
                 {
-                    _wordBuffer = new char[wordLength * 2];
+                    wordStart = i;
                 }
-
-                // Copy word to buffer
-                input.Slice(wordStart, wordLength).CopyTo(_wordBuffer);
-
-                // Anagram the word in the buffer
-                AnagramWord(_wordBuffer.AsSpan(0, wordLength));
-
-                // Write anagrammed word to output
-                _wordBuffer.AsSpan(0, wordLength).CopyTo(output.Slice(writeIndex));
-                writeIndex += wordLength;
-
-                wordStart = -1;
-
-                // Write the non-word character
-                if (i < input.Length)
+                else if (!isWordChar && wordStart >= 0)
                 {
+                    var wordLength = i - wordStart;
+
+                    // Copy word to buffer
+                    input.Slice(wordStart, wordLength).CopyTo(wordBuffer);
+
+                    // Anagram the word in the buffer
+                    AnagramWord(wordBuffer.AsSpan(0, wordLength));
+
+                    // Write anagrammed word to output
+                    wordBuffer.AsSpan(0, wordLength).CopyTo(output.Slice(writeIndex));
+                    writeIndex += wordLength;
+
+                    wordStart = -1;
+
+                    // Write the non-word character
+                    if (i < input.Length)
+                    {
+                        output[writeIndex++] = input[i];
+                    }
+                }
+                else if (!isWordChar && i < input.Length)
+                {
+                    // Non-word character outside a word
                     output[writeIndex++] = input[i];
                 }
             }
-            else if (!isWordChar && i < input.Length)
-            {
-                // Non-word character outside a word
-                output[writeIndex++] = input[i];
-            }
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(wordBuffer);
         }
 
         context.Commit(writeIndex);

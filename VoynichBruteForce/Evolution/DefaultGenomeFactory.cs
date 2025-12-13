@@ -193,10 +193,10 @@ public partial class DefaultGenomeFactory(
             nameof(AtbashCipherModifier) => new AtbashCipherModifier(),
             nameof(VowelRemovalModifier) => new VowelRemovalModifier(),
             nameof(PositionalExtractionModifier) => new PositionalExtractionModifier(random.Next(2, 5)),
-            nameof(NullInsertionModifier) => new NullInsertionModifier((char) ('a' + random.Next(26)),
+            nameof(NullInsertionModifier) => new NullInsertionModifier((char)('a' + random.Next(26)),
                 random.Next(3, 10)),
             nameof(LetterDoublingModifier) => new LetterDoublingModifier(),
-            nameof(AnagramModifier) => new AnagramModifier((AnagramMode) random.Next(Enum.GetValues<AnagramMode>()
+            nameof(AnagramModifier) => new AnagramModifier((AnagramMode)random.Next(Enum.GetValues<AnagramMode>()
                     .Length),
                 random.Next(1000)),
             nameof(AffixModifier) => CreateRandomAffixModifier(random),
@@ -246,7 +246,7 @@ public partial class DefaultGenomeFactory(
 
         for (var i = 0; i < length; i++)
         {
-            chars[i] = (char) ('a' + random.Next(26));
+            chars[i] = (char)('a' + random.Next(26));
         }
 
         return new(chars);

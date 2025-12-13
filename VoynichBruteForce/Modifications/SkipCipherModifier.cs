@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -11,9 +13,6 @@ namespace VoynichBruteForce.Modifications;
 public class SkipCipherModifier : ISpanTextModifier, IPerturbable
 {
     private readonly int _skip;
-
-    // Scratch buffer for tracking used positions
-    private bool[] _usedBuffer = new bool[1024];
 
     public string Name => $"SkipCipher({_skip})";
 
@@ -47,44 +46,46 @@ public class SkipCipherModifier : ISpanTextModifier, IPerturbable
             return;
         }
 
-        // Ensure buffer is large enough and clear it
-        if (_usedBuffer.Length < input.Length)
+        // Rent a buffer for tracking used positions - thread-safe
+        var usedBuffer = ArrayPool<bool>.Shared.Rent(input.Length);
+        try
         {
-            _usedBuffer = new bool[input.Length];
-        }
-        else
-        {
-            Array.Clear(_usedBuffer, 0, input.Length);
-        }
+            // Clear the portion we'll use
+            Array.Clear(usedBuffer, 0, input.Length);
 
-        var writeIndex = 0;
-        var index = 0;
-        var collected = 0;
+            var writeIndex = 0;
+            var index = 0;
+            var collected = 0;
 
-        while (collected < input.Length)
-        {
-            if (!_usedBuffer[index])
+            while (collected < input.Length)
             {
-                output[writeIndex++] = input[index];
-                _usedBuffer[index] = true;
-                collected++;
-            }
-
-            index = (index + _skip) % input.Length;
-
-            // If we've wrapped around and the current position is used,
-            // find the next unused position
-            if (_usedBuffer[index])
-            {
-                var startIndex = index;
-                do
+                if (!usedBuffer[index])
                 {
-                    index = (index + 1) % input.Length;
-                } while (_usedBuffer[index] && index != startIndex);
-            }
-        }
+                    output[writeIndex++] = input[index];
+                    usedBuffer[index] = true;
+                    collected++;
+                }
 
-        context.Commit(writeIndex);
+                index = (index + _skip) % input.Length;
+
+                // If we've wrapped around and the current position is used,
+                // find the next unused position
+                if (usedBuffer[index])
+                {
+                    var startIndex = index;
+                    do
+                    {
+                        index = (index + 1) % input.Length;
+                    } while (usedBuffer[index] && index != startIndex);
+                }
+            }
+
+            context.Commit(writeIndex);
+        }
+        finally
+        {
+            ArrayPool<bool>.Shared.Return(usedBuffer);
+        }
     }
 
     public ITextModifier Perturb(Random random)

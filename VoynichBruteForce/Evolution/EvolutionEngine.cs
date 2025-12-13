@@ -16,7 +16,7 @@ public partial class EvolutionEngine(
     private readonly Hyperparameters _hyperparameters = hyperparameters.Value;
 
     private TimeSpan? _elapsedTotal;
-    
+
     public void Evolve(int seed)
     {
         using var evolutionScope = logger.BeginScope(new Dictionary<string, object>
@@ -45,7 +45,7 @@ public partial class EvolutionEngine(
             var rankedResults = new ConcurrentBag<(Genome Genome, PipelineResult Result)>();
 
             var start = Stopwatch.GetTimestamp();
-            
+
             // 2. Evaluate Fitness
             Parallel.ForEach(population,
                 genome =>
@@ -67,7 +67,7 @@ public partial class EvolutionEngine(
             {
                 _elapsedTotal += elapsed;
             }
-            
+
             // Order by lowest error (best fit)
             var sorted = rankedResults
                 .OrderBy(x => x.Result.TotalErrorScore)

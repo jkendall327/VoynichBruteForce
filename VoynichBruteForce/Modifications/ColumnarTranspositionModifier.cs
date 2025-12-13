@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -12,9 +14,6 @@ namespace VoynichBruteForce.Modifications;
 public class ColumnarTranspositionModifier : ISpanTextModifier, IPerturbable
 {
     private readonly int[] _columnOrder;
-
-    // Scratch buffer for grid - reused to avoid allocations
-    private char[] _gridBuffer = new char[1024];
 
     public string Name => $"ColumnarTransposition({string.Join(",", _columnOrder)})";
 
@@ -94,43 +93,46 @@ public class ColumnarTranspositionModifier : ISpanTextModifier, IPerturbable
         var numRows = (input.Length + numCols - 1) / numCols;
         var gridSize = numRows * numCols;
 
-        // Ensure buffer is large enough
-        if (_gridBuffer.Length < gridSize)
+        // Rent a buffer for the grid - thread-safe
+        var gridBuffer = ArrayPool<char>.Shared.Rent(gridSize);
+        try
         {
-            _gridBuffer = new char[gridSize];
-        }
-
-        // Build the grid (row-major order)
-        var index = 0;
-        for (var row = 0; row < numRows; row++)
-        {
-            for (var col = 0; col < numCols; col++)
-            {
-                _gridBuffer[row * numCols + col] = index < input.Length ? input[index++] : ' ';
-            }
-        }
-
-        // Read out by columns in the specified order
-        var writeIndex = 0;
-        foreach (var col in _columnOrder)
-        {
+            // Build the grid (row-major order)
+            var index = 0;
             for (var row = 0; row < numRows; row++)
             {
-                var c = _gridBuffer[row * numCols + col];
-                if (c != ' ' || writeIndex < input.Length)
+                for (var col = 0; col < numCols; col++)
                 {
-                    output[writeIndex++] = c;
+                    gridBuffer[row * numCols + col] = index < input.Length ? input[index++] : ' ';
                 }
             }
-        }
 
-        // Trim trailing spaces
-        while (writeIndex > 0 && output[writeIndex - 1] == ' ')
+            // Read out by columns in the specified order
+            var writeIndex = 0;
+            foreach (var col in _columnOrder)
+            {
+                for (var row = 0; row < numRows; row++)
+                {
+                    var c = gridBuffer[row * numCols + col];
+                    if (c != ' ' || writeIndex < input.Length)
+                    {
+                        output[writeIndex++] = c;
+                    }
+                }
+            }
+
+            // Trim trailing spaces
+            while (writeIndex > 0 && output[writeIndex - 1] == ' ')
+            {
+                writeIndex--;
+            }
+
+            context.Commit(writeIndex);
+        }
+        finally
         {
-            writeIndex--;
+            ArrayPool<char>.Shared.Return(gridBuffer);
         }
-
-        context.Commit(writeIndex);
     }
 
     public ITextModifier Perturb(Random random)

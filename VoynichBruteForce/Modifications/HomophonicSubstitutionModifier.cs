@@ -18,7 +18,6 @@ namespace VoynichBruteForce.Modifications;
 public class HomophonicSubstitutionModifier : ITextModifier
 {
     private readonly Dictionary<char, string[]> _substitutes;
-    private readonly Dictionary<char, int> _counters;
     private readonly int _seed;
 
     public string Name => $"HomophonicSubstitution(seed:{_seed})";
@@ -36,7 +35,6 @@ public class HomophonicSubstitutionModifier : ITextModifier
     {
         _seed = seed;
         _substitutes = GenerateSubstitutes(seed, maxSubstitutes);
-        _counters = new Dictionary<char, int>();
     }
 
     /// <summary>
@@ -46,13 +44,12 @@ public class HomophonicSubstitutionModifier : ITextModifier
     {
         _seed = 0;
         _substitutes = new Dictionary<char, string[]>(substitutes);
-        _counters = new Dictionary<char, int>();
     }
 
     public string ModifyText(string text)
     {
-        // Reset counters for each call to ensure deterministic output
-        _counters.Clear();
+        // Use local counters for thread-safety
+        var counters = new Dictionary<char, int>();
 
         var result = new StringBuilder(text.Length * 2);
 
@@ -62,7 +59,7 @@ public class HomophonicSubstitutionModifier : ITextModifier
 
             if (_substitutes.TryGetValue(upper, out var subs) && subs.Length > 0)
             {
-                if (!_counters.TryGetValue(upper, out var counter))
+                if (!counters.TryGetValue(upper, out var counter))
                 {
                     counter = 0;
                 }
@@ -76,7 +73,7 @@ public class HomophonicSubstitutionModifier : ITextModifier
                 }
 
                 result.Append(substitute);
-                _counters[upper] = counter + 1;
+                counters[upper] = counter + 1;
             }
             else
             {
