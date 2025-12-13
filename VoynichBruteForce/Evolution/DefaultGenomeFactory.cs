@@ -99,7 +99,7 @@ public partial class DefaultGenomeFactory(
         var mutated = new List<ITextModifier>(original);
 
         // Choose a random mutation strategy
-        var strategy = random.Next(4);
+        var strategy = random.Next(5);
 
         switch (strategy)
         {
@@ -130,6 +130,22 @@ public partial class DefaultGenomeFactory(
 
             case 3: // Add a random modifier
                 mutated.Insert(random.Next(mutated.Count + 1), CreateRandomModifier(random));
+                break;
+
+            case 4: // Perturb a random perturbable modifier
+                var perturbableIndices = mutated
+                    .Select((m, i) => (Modifier: m, Index: i))
+                    .Where(x => x.Modifier is IPerturbable)
+                    .Select(x => x.Index)
+                    .ToList();
+
+                if (perturbableIndices.Count > 0)
+                {
+                    var index = perturbableIndices[random.Next(perturbableIndices.Count)];
+                    var perturbable = (IPerturbable)mutated[index];
+                    mutated[index] = perturbable.Perturb(random);
+                }
+                // If no perturbable modifiers, mutation has no effect (preserves genome)
                 break;
         }
 

@@ -5,7 +5,7 @@ namespace VoynichBruteForce.Modifications;
 /// Known since antiquity and famously used by Julius Caesar.
 /// A 15th-century Italian scholar would certainly have known this technique.
 /// </summary>
-public class CaesarCipherModifier : ISpanTextModifier
+public class CaesarCipherModifier : ISpanTextModifier, IPerturbable
 {
     private readonly int _shift;
 
@@ -45,5 +45,15 @@ public class CaesarCipherModifier : ISpanTextModifier
         }
 
         context.Commit(input.Length);
+    }
+
+    public ITextModifier Perturb(Random random)
+    {
+        // Shift by ±1 or ±2, wrapping around 0-25
+        var delta = random.Next(2) == 0 ? 1 : 2;
+        if (random.Next(2) == 0) delta = -delta;
+
+        var newShift = ((_shift + delta) % 26 + 26) % 26;
+        return new CaesarCipherModifier(newShift);
     }
 }

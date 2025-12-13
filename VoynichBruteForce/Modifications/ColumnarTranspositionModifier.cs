@@ -9,7 +9,7 @@ namespace VoynichBruteForce.Modifications;
 /// paper/parchment arranged in a grid - no special tools or memorization beyond
 /// the column order (key).
 /// </summary>
-public class ColumnarTranspositionModifier : ISpanTextModifier
+public class ColumnarTranspositionModifier : ISpanTextModifier, IPerturbable
 {
     private readonly int[] _columnOrder;
 
@@ -131,5 +131,21 @@ public class ColumnarTranspositionModifier : ISpanTextModifier
         }
 
         context.Commit(writeIndex);
+    }
+
+    public ITextModifier Perturb(Random random)
+    {
+        if (_columnOrder.Length < 2)
+        {
+            // Cannot perturb a single-column transposition
+            return this;
+        }
+
+        // Swap two adjacent columns in the order
+        var newOrder = (int[])_columnOrder.Clone();
+        var swapIndex = random.Next(_columnOrder.Length - 1);
+        (newOrder[swapIndex], newOrder[swapIndex + 1]) = (newOrder[swapIndex + 1], newOrder[swapIndex]);
+
+        return new ColumnarTranspositionModifier(newOrder);
     }
 }

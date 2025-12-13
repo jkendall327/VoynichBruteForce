@@ -10,7 +10,7 @@ namespace VoynichBruteForce.Modifications;
 /// Greek poetry, and throughout medieval manuscripts. Any educated scholar
 /// would be familiar with composing and reading acrostics.
 /// </summary>
-public class PositionalExtractionModifier : ISpanTextModifier
+public class PositionalExtractionModifier : ISpanTextModifier, IPerturbable
 {
     private readonly int _position;
     private readonly bool _fromEnd;
@@ -96,5 +96,22 @@ public class PositionalExtractionModifier : ISpanTextModifier
         }
 
         context.Commit(writeIndex);
+    }
+
+    public ITextModifier Perturb(Random random)
+    {
+        // Either adjust position by ±1 or toggle fromEnd
+        if (random.Next(2) == 0)
+        {
+            // Adjust position (minimum 0)
+            var delta = random.Next(2) == 0 ? 1 : -1;
+            var newPosition = Math.Max(0, _position + delta);
+            return new PositionalExtractionModifier(newPosition, _fromEnd);
+        }
+        else
+        {
+            // Toggle fromEnd flag
+            return new PositionalExtractionModifier(_position, !_fromEnd);
+        }
     }
 }
