@@ -9,13 +9,12 @@ namespace VoynichBruteForce.Modifications;
 /// often doubled consonants in ways that differed from Latin conventions.
 /// This simple expansion technique requires no tools or memorization.
 /// </summary>
-public class LetterDoublingModifier : ISpanTextModifier
+public class LetterDoublingModifier : ITextModifier
 {
     private readonly HashSet<char>? _lettersToDouble;
 
-    public string Name => _lettersToDouble == null
-        ? "LetterDoubling(all)"
-        : $"LetterDoubling({string.Join(",", _lettersToDouble)})";
+    public string Name =>
+        _lettersToDouble == null ? "LetterDoubling(all)" : $"LetterDoubling({string.Join(",", _lettersToDouble)})";
 
     // Low cognitive cost - simple repetition
     public CognitiveComplexity CognitiveCost => new(2);
@@ -31,26 +30,22 @@ public class LetterDoublingModifier : ISpanTextModifier
         _lettersToDouble = lettersToDouble?.ToHashSet(CharComparer.Instance);
     }
 
-    public string ModifyText(string text) => this.RunWithContext(text);
-
-    public void Modify(ref ProcessingContext context)
+    public string ModifyText(string text)
     {
-        var input = context.InputSpan;
-        var output = context.OutputSpan;
+        var result = new char[text.Length * 2];
         var writeIndex = 0;
 
-        for (var i = 0; i < input.Length; i++)
+        foreach (var c in text)
         {
-            var c = input[i];
-            output[writeIndex++] = c;
+            result[writeIndex++] = c;
 
             if (char.IsLetter(c) && ShouldDouble(c))
             {
-                output[writeIndex++] = c;
+                result[writeIndex++] = c;
             }
         }
 
-        context.Commit(writeIndex);
+        return new string(result, 0, writeIndex);
     }
 
     private bool ShouldDouble(char c)
@@ -67,10 +62,11 @@ public class LetterDoublingModifier : ISpanTextModifier
     {
         public static readonly CharComparer Instance = new();
 
-        public bool Equals(char x, char y) =>
-            char.ToLowerInvariant(x) == char.ToLowerInvariant(y);
+        public bool Equals(char x, char y) => char.ToLowerInvariant(x) == char.ToLowerInvariant(y);
 
         public int GetHashCode(char obj) =>
-            char.ToLowerInvariant(obj).GetHashCode();
+            char
+                .ToLowerInvariant(obj)
+                .GetHashCode();
     }
 }
