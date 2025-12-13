@@ -4,7 +4,7 @@ using VoynichBruteForce.Rankings;
 
 namespace VoynichBruteForce.Evolution;
 
-public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunner> logger)
+public partial class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunner> logger)
 {
     public PipelineResult Run(Pipeline pipeline)
     {
@@ -13,6 +13,15 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
         // Separate modifiers: Span-capable run first, then string-only
         var spanModifiers = modifiers.OfType<ISpanTextModifier>().ToList();
         var stringOnlyModifiers = modifiers.Where(m => m is not ISpanTextModifier).ToList();
+
+        using var pipelineScope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["ModifierCount"] = modifiers.Count,
+            ["SpanModifiers"] = spanModifiers.Count,
+            ["StringModifiers"] = stringOnlyModifiers.Count
+        });
+
+        LogPipelineStarted(logger, modifiers.Count, spanModifiers.Count, stringOnlyModifiers.Count, sourceText.Length);
 
         string resultText;
 
@@ -46,9 +55,12 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
             resultText = modifier.ModifyText(resultText);
         }
 
+        LogTextTransformed(logger, sourceText.Length, resultText.Length);
+
         // Sanity check - prevent degenerate optimisation for empty texts by returning max error immediately.
         if (resultText.Length < 100)
         {
+            LogDegenerateTextDetected(logger, resultText.Length);
             return new(modifiers, [])
             {
                 TotalErrorScore = double.MaxValue
@@ -70,4 +82,13 @@ public class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunn
 
         return new(modifiers, results);
     }
+
+    [LoggerMessage(LogLevel.Debug, "Pipeline: {totalModifiers} modifiers ({spanModifiers} span, {stringModifiers} string) | SourceLength={sourceLength}")]
+    static partial void LogPipelineStarted(ILogger<PipelineRunner> logger, int totalModifiers, int spanModifiers, int stringModifiers, int sourceLength);
+
+    [LoggerMessage(LogLevel.Debug, "Text transformed: {sourceLength} -> {resultLength} chars")]
+    static partial void LogTextTransformed(ILogger<PipelineRunner> logger, int sourceLength, int resultLength);
+
+    [LoggerMessage(LogLevel.Debug, "Degenerate text detected: {length} chars (minimum 100)")]
+    static partial void LogDegenerateTextDetected(ILogger<PipelineRunner> logger, int length);
 }

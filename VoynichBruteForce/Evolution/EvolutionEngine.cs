@@ -19,7 +19,16 @@ public partial class EvolutionEngine(
 
     public void Evolve(int seed)
     {
+        using var evolutionScope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["Seed"] = seed,
+            ["PopulationSize"] = PopulationSize,
+            ["MaxGenerations"] = MaxGenerations,
+            ["MutationRate"] = MutationRate
+        });
+
         var sourceText = textProvider.GetText();
+        LogEvolutionStarted(logger, seed, PopulationSize, MaxGenerations, sourceText.Length);
 
         // 1. Initialize Population (Gen 0)
         var population = new List<Pipeline>();
@@ -29,6 +38,8 @@ public partial class EvolutionEngine(
             var modifiers = genomeFactory.CreateRandomGenome(length: 5);
             population.Add(new(sourceText, modifiers));
         }
+
+        LogPopulationInitialized(logger, PopulationSize);
 
         for (var gen = 0; gen < MaxGenerations; gen++)
         {
@@ -48,12 +59,24 @@ public partial class EvolutionEngine(
                 .ToList();
 
             var best = sorted.First();
+            var worst = sorted.Last();
+            var avgError = sorted.Average(x => x.Result.TotalErrorScore);
 
-            LogGenerationInfo(logger, gen, best.Result.PipelineDescription, best.Result.TotalErrorScore);
+            using (logger.BeginScope(new Dictionary<string, object>
+            {
+                ["Generation"] = gen,
+                ["BestError"] = best.Result.TotalErrorScore,
+                ["AvgError"] = avgError,
+                ["WorstError"] = worst.Result.TotalErrorScore
+            }))
+            {
+                LogGenerationInfo(logger, gen, best.Result.PipelineDescription,
+                    best.Result.TotalErrorScore, avgError, worst.Result.TotalErrorScore);
+            }
 
             if (best.Result.TotalErrorScore < 0.05)
             {
-                // Found it. Nobel prize here etc.
+                LogEvolutionSuccess(logger, gen, best.Result.TotalErrorScore);
                 break;
             }
 
@@ -106,8 +129,22 @@ public partial class EvolutionEngine(
 
             population = nextGen;
         }
+
+        LogEvolutionCompleted(logger, MaxGenerations);
     }
 
-    [LoggerMessage(LogLevel.Information, "Gen {gen} Best: {desc} | Error: {err}")]
-    static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger, int gen, string desc, double err);
+    [LoggerMessage(LogLevel.Information, "Starting evolution: Seed={seed}, Population={populationSize}, MaxGen={maxGenerations}, SourceTextLength={sourceTextLength}")]
+    static partial void LogEvolutionStarted(ILogger<EvolutionEngine> logger, int seed, int populationSize, int maxGenerations, int sourceTextLength);
+
+    [LoggerMessage(LogLevel.Information, "Population initialized with {count} random genomes")]
+    static partial void LogPopulationInitialized(ILogger<EvolutionEngine> logger, int count);
+
+    [LoggerMessage(LogLevel.Information, "Gen {gen}: Best={bestError:F6} (Avg={avgError:F6}, Worst={worstError:F6}) | {desc}")]
+    static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger, int gen, string desc, double bestError, double avgError, double worstError);
+
+    [LoggerMessage(LogLevel.Information, "Evolution succeeded at generation {gen} with error {error:F6}")]
+    static partial void LogEvolutionSuccess(ILogger<EvolutionEngine> logger, int gen, double error);
+
+    [LoggerMessage(LogLevel.Information, "Evolution completed after {maxGenerations} generations")]
+    static partial void LogEvolutionCompleted(ILogger<EvolutionEngine> logger, int maxGenerations);
 }
