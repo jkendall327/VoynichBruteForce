@@ -46,6 +46,10 @@ public partial class EvolutionEngine(
             MaxDegreeOfParallelism = _appSettings.DegreeOfParallelism
         };
 
+        // Tracking variables for cataclysm feature
+        double globalBestError = double.MaxValue;
+        int generationsSinceLastImprovement = 0;
+
         // Evaluate fitness.
         for (var gen = 0; gen < _hyperparameters.MaxGenerations; gen++)
         {
@@ -83,6 +87,18 @@ public partial class EvolutionEngine(
             var worst = sorted.Last();
             var avgError = sorted.Average(x => x.Result.TotalErrorScore);
 
+            // Check for improvement (using a small epsilon for float comparison)
+            var currentBestError = best.Result.TotalErrorScore;
+            if (currentBestError < globalBestError - 0.00001)
+            {
+                globalBestError = currentBestError;
+                generationsSinceLastImprovement = 0;
+            }
+            else
+            {
+                generationsSinceLastImprovement++;
+            }
+
             LogGenerationInfo(logger, gen, best.Result.PipelineDescription,
                 best.Result.TotalErrorScore, avgError, worst.Result.TotalErrorScore, elapsed, _elapsedTotal.Value);
 
@@ -96,48 +112,71 @@ public partial class EvolutionEngine(
             // 3. Selection & Reproduction
             var nextGen = new List<Genome>();
 
-            // Elitism: Keep the top 10% unchanged
-            nextGen.AddRange(sorted
-                .Take(_hyperparameters.PopulationSize / 10)
-                .Select(x => x.Genome));
-
-            // Fill the rest with mutations of the top 50%
-            var survivors = sorted
-                .Take(_hyperparameters.PopulationSize / 2)
-                .ToList();
-
-            var random = new Random(seed + gen); // Ensure randomness varies per gen
-
-            while (nextGen.Count < _hyperparameters.PopulationSize)
+            // Check for cataclysm trigger
+            if (generationsSinceLastImprovement >= _hyperparameters.StagnationThreshold)
             {
-                // STEP A: Select two distinctive parents
-                // (Using random selection from the top 50% is a simple, effective strategy)
-                var parentA = survivors[random.Next(survivors.Count)].Genome;
-                var parentB = survivors[random.Next(survivors.Count)].Genome;
+                LogCataclysmTriggered(logger, gen, generationsSinceLastImprovement);
 
-                // Try to ensure we aren't breeding a parent with itself,
-                // though in small pools it happens.
-                if (survivors.Count > 1)
+                // Keep only the absolute best genome (the "Noah's Ark" approach)
+                nextGen.Add(best.Genome);
+
+                // Fill the rest of the population with brand new random genomes
+                // (fresh genetic material to escape the local optimum)
+                while (nextGen.Count < _hyperparameters.PopulationSize)
                 {
-                    while (parentB == parentA)
+                    nextGen.Add(genomeFactory.CreateRandomGenome(modifierCount: 5));
+                }
+
+                // Reset stagnation counter
+                generationsSinceLastImprovement = 0;
+            }
+            else
+            {
+                // Standard evolution logic
+
+                // Elitism: Keep the top 10% unchanged
+                nextGen.AddRange(sorted
+                    .Take(_hyperparameters.PopulationSize / 10)
+                    .Select(x => x.Genome));
+
+                // Fill the rest with mutations of the top 50%
+                var survivors = sorted
+                    .Take(_hyperparameters.PopulationSize / 2)
+                    .ToList();
+
+                var random = new Random(seed + gen); // Ensure randomness varies per gen
+
+                while (nextGen.Count < _hyperparameters.PopulationSize)
+                {
+                    // STEP A: Select two distinctive parents
+                    // (Using random selection from the top 50% is a simple, effective strategy)
+                    var parentA = survivors[random.Next(survivors.Count)].Genome;
+                    var parentB = survivors[random.Next(survivors.Count)].Genome;
+
+                    // Try to ensure we aren't breeding a parent with itself,
+                    // though in small pools it happens.
+                    if (survivors.Count > 1)
                     {
-                        parentB = survivors[random.Next(survivors.Count)].Genome;
+                        while (parentB == parentA)
+                        {
+                            parentB = survivors[random.Next(survivors.Count)].Genome;
+                        }
                     }
+
+                    // STEP B: Crossover
+                    // Create a child by mixing traits of A and B (both source text and modifiers)
+                    var child = genomeFactory.Crossover(parentA, parentB);
+
+                    // STEP C: Mutation (The "Spark" of novelty)
+                    // Crossover rearranges existing solutions. Mutation finds new ones.
+                    // We apply mutation probabilistically.
+                    if (random.NextDouble() < _hyperparameters.MutationRate)
+                    {
+                        child = genomeFactory.Mutate(child);
+                    }
+
+                    nextGen.Add(child);
                 }
-
-                // STEP B: Crossover
-                // Create a child by mixing traits of A and B (both source text and modifiers)
-                var child = genomeFactory.Crossover(parentA, parentB);
-
-                // STEP C: Mutation (The "Spark" of novelty)
-                // Crossover rearranges existing solutions. Mutation finds new ones.
-                // We apply mutation probabilistically.
-                if (random.NextDouble() < _hyperparameters.MutationRate)
-                {
-                    child = genomeFactory.Mutate(child);
-                }
-
-                nextGen.Add(child);
             }
 
             population = nextGen;
@@ -169,4 +208,7 @@ public partial class EvolutionEngine(
 
     [LoggerMessage(LogLevel.Information, "Evolution completed after {MaxGenerations} generations")]
     static partial void LogEvolutionCompleted(ILogger<EvolutionEngine> logger, int maxGenerations);
+
+    [LoggerMessage(LogLevel.Warning, "CATACLYSM TRIGGERED at Gen {Gen}! Stagnation for {Count} generations. Population wiped.")]
+    static partial void LogCataclysmTriggered(ILogger<EvolutionEngine> logger, int gen, int count);
 }

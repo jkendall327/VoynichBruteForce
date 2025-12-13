@@ -28,4 +28,9 @@ public class Hyperparameters
     /// Hard wall for cognitive complexity (maximum allowed).
     /// </summary>
     public int HardWallComplexity { get; init; } = 100;
+
+    /// <summary>
+    /// Number of generations without improvement before triggering a mass extinction event.
+    /// </summary>
+    public int StagnationThreshold { get; init; } = 50;
 }
