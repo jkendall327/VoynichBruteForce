@@ -68,6 +68,37 @@ public ref struct ProcessingContext
         initialText.CopyTo(_sourceBuffer.AsSpan());
         CurrentLength = initialText.Length;
     }
+    
+    /// <summary>
+    /// Ensures both ping-pong buffers have at least <paramref name="required"/> capacity.
+    /// Copies the current input (CurrentLength chars) into the new source buffer.
+    /// </summary>
+    public void EnsureCapacity(int required)
+    {
+        if (required <= Capacity)
+        {
+            return;
+        }
+
+        // Doubling for decent amortisation, similar to List<T> etc.
+        var newCapacity = Math.Max(required, Capacity * 2);
+
+        var pool = ArrayPool<char>.Shared;
+
+        var newSource = pool.Rent(newCapacity);
+        var newDest = pool.Rent(newCapacity);
+
+        _sourceBuffer.AsSpan(0, CurrentLength).CopyTo(newSource);
+
+        var oldSource = _sourceBuffer;
+        var oldDest = _destinationBuffer;
+
+        _sourceBuffer = newSource;
+        _destinationBuffer = newDest;
+
+        pool.Return(oldSource);
+        pool.Return(oldDest);
+    }
 
     /// <summary>
     /// Called by a modifier after it finishes writing to OutputSpan.

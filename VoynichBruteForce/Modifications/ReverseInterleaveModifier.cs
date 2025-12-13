@@ -1,42 +1,51 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
 /// Interleaves text with its reverse.
 /// "ABC" → "ACBBCA" (original interleaved with reverse)
-///
-/// This modifier uses string-based processing because it doubles the text length,
-/// which is incompatible with the fixed-capacity Span-based buffer architecture.
 /// </summary>
-public class ReverseInterleaveModifier : ITextModifier
+public class ReverseInterleaveModifier : ISpanTextModifier
 {
-    public string Name => "Interleave(reverse)";
+    public string Name => "Interleave (reverse)";
 
     // Moderate cognitive cost - requires tracking two streams
     public CognitiveComplexity CognitiveCost => new(5);
 
-    public string ModifyText(string text)
+    public string ModifyText(string text) => this.RunWithContext(text);
+
+    public void Modify(ref ProcessingContext context)
     {
-        if (text.Length <= 1)
+        var input = context.InputSpan;
+        var n = input.Length;
+
+        if (n == 0)
         {
-            return text.Length == 1 ? text + text : text;
+            return;
         }
 
-        var reversed = new char[text.Length];
-        for (var i = 0; i < text.Length; i++)
+        var outLen = n * 2;
+        context.EnsureCapacity(outLen);
+
+        var output = context.OutputSpan;
+
+        // "A" -> "AA"
+        if (n == 1)
         {
-            reversed[i] = text[text.Length - 1 - i];
+            output[0] = input[0];
+            output[1] = input[0];
+            context.Commit(2);
+            return;
         }
 
-        var result = new StringBuilder(text.Length * 2);
-
-        for (var i = 0; i < text.Length; i++)
+        for (var i = 0; i < n; i++)
         {
-            result.Append(text[i]);
-            result.Append(reversed[i]);
+            // Even indexes come from forward pass of the input.
+            output[2 * i] = input[i];
+            
+            // Odd indexes from reverse pass of the input.
+            output[2 * i + 1] = input[n - 1 - i];
         }
 
-        return result.ToString();
+        context.Commit(outLen);
     }
 }
