@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace VoynichBruteForce.Modifications;
 
 /// <summary>
@@ -11,14 +9,12 @@ namespace VoynichBruteForce.Modifications;
 /// technique was documented in Renaissance cryptography manuals and
 /// was used in diplomatic correspondence. The concept requires only
 /// a lookup table - no special tools.
-///
-/// NOTE: This modifier uses string-based processing because it can output
-/// multiple characters per input character (variable-length output).
 /// </summary>
-public class HomophonicSubstitutionModifier : ITextModifier
+public class HomophonicSubstitutionModifier : ISpanTextModifier
 {
     private readonly Dictionary<char, string[]> _substitutes;
     private readonly int _seed;
+    private readonly int _maxSubstituteLength;
 
     public string Name => $"HomophonicSubstitution(seed:{_seed})";
 
@@ -35,6 +31,10 @@ public class HomophonicSubstitutionModifier : ITextModifier
     {
         _seed = seed;
         _substitutes = GenerateSubstitutes(seed, maxSubstitutes);
+        _maxSubstituteLength = _substitutes.Values
+            .SelectMany(arr => arr)
+            .DefaultIfEmpty("")
+            .Max(s => s.Length);
     }
 
     /// <summary>
@@ -44,17 +44,37 @@ public class HomophonicSubstitutionModifier : ITextModifier
     {
         _seed = 0;
         _substitutes = new Dictionary<char, string[]>(substitutes);
+        _maxSubstituteLength = _substitutes.Values
+            .SelectMany(arr => arr)
+            .DefaultIfEmpty("")
+            .Max(s => s.Length);
     }
 
-    public string ModifyText(string text)
+    public string ModifyText(string text) => this.RunWithContext(text);
+
+    public void Modify(ref ProcessingContext context)
     {
+        var input = context.InputSpan;
+
+        if (input.Length == 0)
+        {
+            return;
+        }
+
+        // Max expansion: each char could expand to _maxSubstituteLength
+        // Use at least 1 to handle edge case of empty substitutes dictionary
+        var maxExpansion = Math.Max(1, _maxSubstituteLength);
+        context.EnsureCapacity(input.Length * maxExpansion);
+
+        var output = context.OutputSpan;
+
         // Use local counters for thread-safety
         var counters = new Dictionary<char, int>();
+        var writeIndex = 0;
 
-        var result = new StringBuilder(text.Length * 2);
-
-        foreach (var c in text)
+        for (var i = 0; i < input.Length; i++)
         {
+            var c = input[i];
             var upper = char.ToUpperInvariant(c);
 
             if (_substitutes.TryGetValue(upper, out var subs) && subs.Length > 0)
@@ -66,22 +86,32 @@ public class HomophonicSubstitutionModifier : ITextModifier
 
                 var substitute = subs[counter % subs.Length];
 
-                // Preserve case for single-char substitutes
-                if (substitute.Length == 1 && char.IsLower(c))
+                if (substitute.Length == 1)
                 {
-                    substitute = substitute.ToLowerInvariant();
+                    // Single-char substitute - preserve case
+                    var subChar = char.IsLower(c)
+                        ? char.ToLowerInvariant(substitute[0])
+                        : substitute[0];
+                    output[writeIndex++] = subChar;
+                }
+                else
+                {
+                    // Multi-char substitute - copy directly
+                    foreach (var sc in substitute)
+                    {
+                        output[writeIndex++] = sc;
+                    }
                 }
 
-                result.Append(substitute);
                 counters[upper] = counter + 1;
             }
             else
             {
-                result.Append(c);
+                output[writeIndex++] = c;
             }
         }
 
-        return result.ToString();
+        context.Commit(writeIndex);
     }
 
     private static Dictionary<char, string[]> GenerateSubstitutes(int seed, int maxSubstitutes)

@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<IModifierFactory, SkipCipherModifierFactory>();
             services.AddSingleton<IModifierFactory, InterleaveModifierFactory>();
             services.AddSingleton<IModifierFactory, WordReversalModifierFactory>();
+            services.AddSingleton<IModifierFactory, ReverseInterleaveModifierFactory>();
         }
 
         public void AddVoynichConfiguration(IConfiguration configuration)

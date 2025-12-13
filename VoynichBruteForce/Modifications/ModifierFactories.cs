@@ -107,3 +107,8 @@ public sealed class WordReversalModifierFactory : IModifierFactory
 {
     public ITextModifier CreateRandom(Random random) => new WordReversalModifier();
 }
+
+public sealed class ReverseInterleaveModifierFactory : IModifierFactory
+{
+    public ITextModifier CreateRandom(Random random) => new ReverseInterleaveModifier();
+}
