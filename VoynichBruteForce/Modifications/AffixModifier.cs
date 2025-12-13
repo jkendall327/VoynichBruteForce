@@ -14,6 +14,7 @@ public class AffixModifier : ISpanTextModifier
     private readonly string? _prefix;
     private readonly string? _suffix;
     private readonly AffixMode _mode;
+    private readonly int _maxAffixLength;
 
     private static readonly HashSet<char> Vowels = new()
     {
@@ -49,9 +50,17 @@ public class AffixModifier : ISpanTextModifier
         {
             case AffixMode.AddPrefix:
                 _prefix = affix ?? throw new ArgumentNullException(nameof(affix));
+                _maxAffixLength = _prefix.Length;
                 break;
             case AffixMode.AddSuffix:
                 _suffix = affix ?? throw new ArgumentNullException(nameof(affix));
+                _maxAffixLength = _suffix.Length;
+                break;
+            case AffixMode.PigLatin:
+                _maxAffixLength = 2; // "ay" suffix
+                break;
+            default:
+                _maxAffixLength = 0; // MoveFirstToEnd, MoveLastToStart don't change length
                 break;
         }
     }
@@ -61,6 +70,18 @@ public class AffixModifier : ISpanTextModifier
     public void Modify(ref ProcessingContext context)
     {
         var input = context.InputSpan;
+
+        if (input.Length == 0)
+        {
+            return;
+        }
+
+        // Calculate max expansion: worst case is every 2 chars forms a word (e.g., "a b c...")
+        // Each word can grow by _maxAffixLength
+        var estimatedWords = (input.Length + 1) / 2;
+        var maxOutputLength = input.Length + estimatedWords * _maxAffixLength;
+        context.EnsureCapacity(maxOutputLength);
+
         var output = context.OutputSpan;
         var writeIndex = 0;
         var wordStart = -1;

@@ -162,4 +162,120 @@ public class PipelineIntegrationTests
         // ABC -> ACBBCA (6 chars) -> each letter becomes 2 chars = 12 chars
         Assert.Equal(12, result.Length);
     }
+
+    [Fact]
+    public void AffixModifier_AfterGrowthModifier_DoesNotOverflowBuffer()
+    {
+        // This test reproduces the "Destination is too short" error
+        // when AffixModifier runs after a growth modifier like LetterDoubling
+        var input = "hello world test";
+        var context = new ProcessingContext(input, input.Length * 4);
+        try
+        {
+            // First double the letters (growth modifier)
+            var letterDoubling = new LetterDoublingModifier();
+            letterDoubling.Modify(ref context);
+
+            // Then add a prefix to each word (more growth)
+            var affixModifier = new AffixModifier(AffixMode.AddPrefix, "pre");
+            affixModifier.Modify(ref context);
+
+            var result = context.InputSpan.ToString();
+
+            // Should contain "pre" before each word
+            Assert.Contains("pre", result);
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
+
+    [Fact]
+    public void AffixModifier_PigLatin_AfterGrowthModifier_DoesNotOverflow()
+    {
+        var input = "hello world";
+        var context = new ProcessingContext(input, input.Length * 4);
+        try
+        {
+            var letterDoubling = new LetterDoublingModifier();
+            letterDoubling.Modify(ref context);
+
+            var pigLatin = new AffixModifier(AffixMode.PigLatin);
+            pigLatin.Modify(ref context);
+
+            var result = context.InputSpan.ToString();
+
+            // PigLatin adds "ay" to each word
+            Assert.Contains("ay", result);
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
+
+    [Fact]
+    public void AffixModifier_WithLongPrefix_DoesNotOverflow()
+    {
+        // Many short words with a long prefix - worst case for buffer growth
+        var input = "a b c d e f g h i j k l m n o p";
+        var affixModifier = new AffixModifier(AffixMode.AddPrefix, "prefix");
+
+        var result = affixModifier.ModifyText(input);
+
+        // Each single letter word gets "prefix" added
+        Assert.Contains("prefixa", result);
+        Assert.Contains("prefixb", result);
+    }
+
+    [Fact]
+    public void AffixModifier_AfterMultipleGrowthModifiers_DoesNotOverflow()
+    {
+        // This reproduces the actual failure: ReverseInterleave (2x) + LetterDoubling (2x) + Affix
+        // Input: 100 chars -> ReverseInterleave: 200 chars -> LetterDoubling: 400 chars -> Affix with prefix
+        // With 4x initial allocation (400), we might overflow when adding prefixes to many words
+        var input = "a b c d e f g h i j a b c d e f g h i j a b c d e f g h i j a b c d e f g h i j a b c d e";
+        var context = new ProcessingContext(input, input.Length * 4);  // Standard 4x allocation
+        try
+        {
+            // Chain growth modifiers to exceed 4x
+            var reverseInterleave = new ReverseInterleaveModifier();  // 2x
+            var letterDoubling = new LetterDoublingModifier();         // 2x more
+            var affixModifier = new AffixModifier(AffixMode.AddPrefix, "test");
+
+            reverseInterleave.Modify(ref context);
+            letterDoubling.Modify(ref context);
+            affixModifier.Modify(ref context);  // This should work with EnsureCapacity fix
+
+            var result = context.InputSpan.ToString();
+            Assert.Contains("test", result);
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
+
+    [Fact]
+    public void AffixModifier_WithTightBuffer_MustCallEnsureCapacity()
+    {
+        // Simulate a scenario where prior modifiers haven't left enough room
+        // Many short words with long prefix on a minimal buffer
+        var input = "a b c d e f g h i j k l m n o p q r s t";
+        // Allocate only slightly more than input - this will fail without EnsureCapacity
+        var context = new ProcessingContext(input, input.Length + 10);
+        try
+        {
+            var affixModifier = new AffixModifier(AffixMode.AddPrefix, "verylongprefix");
+            affixModifier.Modify(ref context);
+
+            var result = context.InputSpan.ToString();
+            Assert.Contains("verylongprefixa", result);
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
 }
