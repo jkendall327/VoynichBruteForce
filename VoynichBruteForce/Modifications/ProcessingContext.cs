@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 
 namespace VoynichBruteForce.Modifications;
 
@@ -101,12 +102,29 @@ public ref struct ProcessingContext
     }
 
     /// <summary>
+    /// Ensures capacity and returns the output span in one call.
+    /// This is the preferred pattern for modifiers that need to grow the buffer,
+    /// as it prevents forgetting to call EnsureCapacity before accessing OutputSpan.
+    /// </summary>
+    /// <param name="requiredCapacity">The minimum capacity needed for the output.</param>
+    /// <returns>A writable span for the output.</returns>
+    public Span<char> GetOutputSpan(int requiredCapacity)
+    {
+        EnsureCapacity(requiredCapacity);
+        return OutputSpan;
+    }
+
+    /// <summary>
     /// Called by a modifier after it finishes writing to OutputSpan.
     /// This swaps the buffers so the next modifier reads from the output of the previous one.
     /// </summary>
     /// <param name="newLength">The length of data written to OutputSpan.</param>
     public void Commit(int newLength)
     {
+        Debug.Assert(newLength <= Capacity,
+            $"Buffer overflow detected: tried to commit {newLength} chars but capacity is only {Capacity}. " +
+            "The modifier should call EnsureCapacity() or use GetOutputSpan() before writing.");
+
         CurrentLength = newLength;
         (_sourceBuffer, _destinationBuffer) = (_destinationBuffer, _sourceBuffer);
     }

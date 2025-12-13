@@ -278,4 +278,46 @@ public class PipelineIntegrationTests
             context.Dispose();
         }
     }
+
+    [Fact]
+    public void NullInsertionModifier_WithTightBuffer_MustCallEnsureCapacity()
+    {
+        // NullInsertion with interval=1 doubles the text length
+        var input = "abcdefghij";
+        // Allocate minimal buffer - should fail without EnsureCapacity
+        var context = new ProcessingContext(input, input.Length + 2);
+        try
+        {
+            var nullInsertion = new NullInsertionModifier('X', 1);  // Insert X after every char = 2x growth
+            nullInsertion.Modify(ref context);
+
+            var result = context.InputSpan.ToString();
+            Assert.Equal(20, result.Length);  // 10 original + 10 nulls
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
+
+    [Fact]
+    public void ColumnarTranspositionModifier_WithTightBuffer_MustCallEnsureCapacity()
+    {
+        // Columnar transposition can pad with spaces, potentially exceeding input length
+        var input = "HELLO";  // 5 chars
+        // With 3 columns: numRows=2, gridSize=6, could write 6 chars before trimming
+        var context = new ProcessingContext(input, input.Length);  // Exact size - no room for padding
+        try
+        {
+            var columnar = new ColumnarTranspositionModifier([2, 0, 1]);
+            columnar.Modify(ref context);
+
+            var result = context.InputSpan.ToString();
+            Assert.True(result.Length <= input.Length + 2);  // Allow small padding
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
 }

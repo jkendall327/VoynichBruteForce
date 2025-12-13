@@ -41,6 +41,18 @@ public class NullInsertionModifier : ISpanTextModifier, IPerturbable
     public void Modify(ref ProcessingContext context)
     {
         var input = context.InputSpan;
+
+        if (input.Length == 0)
+        {
+            return;
+        }
+
+        // Calculate max expansion: each interval chars adds one null char
+        // Worst case: input.Length + ceil(input.Length / interval)
+        var nullCount = (input.Length + _interval - 1) / _interval;
+        var maxOutputLength = input.Length + nullCount;
+        context.EnsureCapacity(maxOutputLength);
+
         var output = context.OutputSpan;
         var writeIndex = 0;
         var count = 0;

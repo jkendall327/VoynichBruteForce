@@ -87,11 +87,20 @@ public class ColumnarTranspositionModifier : ISpanTextModifier, IPerturbable
     public void Modify(ref ProcessingContext context)
     {
         var input = context.InputSpan;
-        var output = context.OutputSpan;
+
+        if (input.Length == 0)
+        {
+            return;
+        }
 
         var numCols = _columnOrder.Length;
         var numRows = (input.Length + numCols - 1) / numCols;
         var gridSize = numRows * numCols;
+
+        // Grid can be larger than input due to padding - ensure we have enough space
+        context.EnsureCapacity(gridSize);
+
+        var output = context.OutputSpan;
 
         // Rent a buffer for the grid - thread-safe
         var gridBuffer = ArrayPool<char>.Shared.Rent(gridSize);
