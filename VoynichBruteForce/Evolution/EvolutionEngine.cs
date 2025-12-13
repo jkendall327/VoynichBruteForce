@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VoynichBruteForce.Sources;
@@ -89,6 +90,10 @@ public partial class EvolutionEngine(
             if (best.Result.TotalErrorScore < 0.05)
             {
                 LogEvolutionSuccess(logger, gen, best.Result.TotalErrorScore);
+                
+                var json = JsonSerializer.Serialize(best.Result);
+                File.WriteAllText("result.json", json);
+                
                 break;
             }
 
