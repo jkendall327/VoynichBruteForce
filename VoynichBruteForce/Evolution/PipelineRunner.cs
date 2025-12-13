@@ -73,16 +73,9 @@ public partial class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyp
 
         var rankers = rankerProvider.GetRankers();
 
-        var results = new List<RankerResult>();
-
-        foreach (var ranker in rankers)
-        {
-            var result = ranker.CalculateRank(resultText);
-
-            results.Add(result);
-
-            logger.LogTrace("{RankingMethod}: {Error}", ranker.Name, result);
-        }
+        var results = rankers
+            .Select(ranker => ranker.CalculateRank(resultText))
+            .ToList();
 
         return new(sourceTextId, modifiers, results, _hyperparameters);
     }
