@@ -11,7 +11,7 @@ public static class ServiceCollectionExtensions
     public static void AddVoynichServices(this IServiceCollection services)
     {
         services.AddSingleton<IGenomeFactory, DefaultGenomeFactory>();
-        services.AddSingleton<ITextProvider, LoremIpsumTextProvider>();
+        services.AddSingleton<ISourceTextRegistry, DefaultSourceTextRegistry>();
         services.AddSingleton<IRankerProvider, DefaultRankerProvider>();
         services.AddSingleton<PipelineRunner>();
         services.AddSingleton<EvolutionEngine>();

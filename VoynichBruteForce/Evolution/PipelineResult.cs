@@ -1,5 +1,6 @@
 using VoynichBruteForce.Modifications;
 using VoynichBruteForce.Rankings;
+using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
 
@@ -7,6 +8,7 @@ public class PipelineResult
 {
     /// <summary>
     /// Abbreviated description of the algorithm used in this pipeline to modify the source text.
+    /// Includes the source text type and the sequence of modifiers.
     /// </summary>
     public string PipelineDescription { get; }
 
@@ -25,10 +27,10 @@ public class PipelineResult
     /// </summary>
     public List<RankerResult> Results { get; set; }
 
-    public PipelineResult(List<ITextModifier> modifiers, List<RankerResult> results)
+    public PipelineResult(SourceTextId sourceTextId, List<ITextModifier> modifiers, List<RankerResult> results)
     {
         Results = results;
-        PipelineDescription = string.Join(" -> ", modifiers.Select(m => m.Name));
+        PipelineDescription = $"[{sourceTextId}] " + string.Join(" -> ", modifiers.Select(m => m.Name));
         TotalCognitiveLoad = modifiers.Sum(s => s.CognitiveCost.Value);
 
         var initialError = results.Sum(r => r.NormalizedError * r.Weight.ToMultiplier());

@@ -1,28 +1,27 @@
-using VoynichBruteForce.Modifications;
-
 namespace VoynichBruteForce.Evolution;
 
 /// <summary>
-/// Supplies an arbitrary combination of text modification algorithms.
-/// The intent is that they are then applied to a text in sequence.
-/// The sequence of algorithms may be entirely random, or determined in part by the nature of the provided source text.
+/// Supplies an arbitrary combination of source text and text modification algorithms.
+/// The intent is that the source text and modifiers are then applied in sequence.
+/// The genome (source text + modifiers) may be entirely random, or evolved through mutation and crossover.
 /// </summary>
 public interface IGenomeFactory
 {
     /// <summary>
-    /// Creates a random list of modifiers.
+    /// Creates a random genome with a random source text and random modifiers.
     /// </summary>
-    List<ITextModifier> CreateRandomGenome(int length);
+    Genome CreateRandomGenome(int modifierCount);
 
     /// <summary>
-    /// Applies a minor change to an existing text modification strategy.
-    /// E.g. removing one element, adding a new element, changing one element.
+    /// Applies mutation to an existing genome.
+    /// May mutate the source text, the modifiers, or both.
     /// </summary>
-    List<ITextModifier> Mutate(List<ITextModifier> original);
+    Genome Mutate(Genome original);
 
     /// <summary>
     /// Combines two parent genomes to create a child.
-    /// Example strategy: Take first half of A and second half of B.
+    /// Source text: 50/50 chance from either parent (uniform crossover for categorical gene).
+    /// Modifiers: Single-point crossover taking head from A and tail from B.
     /// </summary>
-    List<ITextModifier> Crossover(List<ITextModifier> parentA, List<ITextModifier> parentB);
+    Genome Crossover(Genome parentA, Genome parentB);
 }

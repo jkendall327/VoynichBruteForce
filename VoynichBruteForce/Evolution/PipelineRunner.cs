@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Logging;
 using VoynichBruteForce.Modifications;
 using VoynichBruteForce.Rankings;
+using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
 
 public partial class PipelineRunner(IRankerProvider rankerProvider, ILogger<PipelineRunner> logger)
 {
-    public PipelineResult Run(Pipeline pipeline)
+    public PipelineResult Run(Pipeline pipeline, SourceTextId sourceTextId)
     {
         (var sourceText, var modifiers) = pipeline;
 
@@ -61,7 +62,7 @@ public partial class PipelineRunner(IRankerProvider rankerProvider, ILogger<Pipe
         if (resultText.Length < 100)
         {
             LogDegenerateTextDetected(logger, resultText.Length);
-            return new(modifiers, [])
+            return new(sourceTextId, modifiers, [])
             {
                 TotalErrorScore = double.MaxValue
             };
@@ -80,7 +81,7 @@ public partial class PipelineRunner(IRankerProvider rankerProvider, ILogger<Pipe
             logger.LogTrace("{RankingMethod}: {Error}", ranker.Name, result);
         }
 
-        return new(modifiers, results);
+        return new(sourceTextId, modifiers, results);
     }
 
     [LoggerMessage(LogLevel.Debug, "Pipeline: {totalModifiers} modifiers ({spanModifiers} span, {stringModifiers} string) | SourceLength={sourceLength}")]

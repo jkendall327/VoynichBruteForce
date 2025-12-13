@@ -1,10 +1,14 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VoynichBruteForce.Modifications;
+using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
 
-public partial class DefaultGenomeFactory(IOptions<AppSettings> options, ILogger<DefaultGenomeFactory> logger) : IGenomeFactory
+public partial class DefaultGenomeFactory(
+    IOptions<AppSettings> options,
+    ISourceTextRegistry sourceTextRegistry,
+    ILogger<DefaultGenomeFactory> logger) : IGenomeFactory
 {
     private static readonly Type[] ModifierTypes =
     [
@@ -23,22 +27,75 @@ public partial class DefaultGenomeFactory(IOptions<AppSettings> options, ILogger
         typeof(WordReversalModifier)
     ];
 
-    public List<ITextModifier> CreateRandomGenome(int length)
+    public Genome CreateRandomGenome(int modifierCount)
     {
         var random = new Random(options.Value.Seed);
-        var genome = new List<ITextModifier>(length);
 
-        for (var i = 0; i < length; i++)
-        {
-            genome.Add(CreateRandomModifier(random));
-        }
+        var sourceTextId = sourceTextRegistry.GetRandomId(random);
+        var modifiers = CreateRandomModifiers(random, modifierCount);
 
-        return genome;
+        return new Genome(sourceTextId, modifiers);
     }
 
-    public List<ITextModifier> Mutate(List<ITextModifier> original)
+    public Genome Mutate(Genome original)
     {
         var random = new Random(options.Value.Seed);
+
+        // Decide what to mutate: 0=modifiers only, 1=source only, 2=both
+        var mutationTarget = random.Next(3);
+
+        var newSourceTextId = original.SourceTextId;
+        var newModifiers = new List<ITextModifier>(original.Modifiers);
+
+        if (mutationTarget == 1 || mutationTarget == 2)
+        {
+            // Mutate source text: pick a different source
+            var oldSourceTextId = newSourceTextId;
+            newSourceTextId = sourceTextRegistry.GetRandomId(random);
+            LogSourceTextMutation(logger, oldSourceTextId, newSourceTextId);
+        }
+
+        if (mutationTarget == 0 || mutationTarget == 2)
+        {
+            // Mutate modifiers using existing logic
+            newModifiers = MutateModifiers(newModifiers, random);
+        }
+
+        return new Genome(newSourceTextId, newModifiers);
+    }
+
+    public Genome Crossover(Genome parentA, Genome parentB)
+    {
+        var random = new Random(options.Value.Seed);
+
+        // Source text: 50/50 uniform crossover (standard for categorical genes)
+        var childSourceTextId = random.Next(2) == 0
+            ? parentA.SourceTextId
+            : parentB.SourceTextId;
+
+        // Modifiers: existing single-point crossover logic
+        var childModifiers = CrossoverModifiers(parentA.Modifiers, parentB.Modifiers, random);
+
+        LogCrossover(logger, parentA.Modifiers.Count, parentB.Modifiers.Count, childModifiers.Count,
+            parentA.SourceTextId, parentB.SourceTextId, childSourceTextId);
+
+        return new Genome(childSourceTextId, childModifiers);
+    }
+
+    private List<ITextModifier> CreateRandomModifiers(Random random, int count)
+    {
+        var modifiers = new List<ITextModifier>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            modifiers.Add(CreateRandomModifier(random));
+        }
+
+        return modifiers;
+    }
+
+    private List<ITextModifier> MutateModifiers(List<ITextModifier> original, Random random)
+    {
         var mutated = new List<ITextModifier>(original);
 
         // Choose a random mutation strategy
@@ -76,9 +133,35 @@ public partial class DefaultGenomeFactory(IOptions<AppSettings> options, ILogger
                 break;
         }
 
-        LogMutation(logger, original.Count);
+        LogModifierMutation(logger, original.Count);
 
         return mutated;
+    }
+
+    private List<ITextModifier> CrossoverModifiers(
+        List<ITextModifier> parentA,
+        List<ITextModifier> parentB,
+        Random random)
+    {
+        var child = new List<ITextModifier>();
+
+        // Pick a split point based on the shorter parent to avoid index errors
+        var minLen = Math.Min(parentA.Count, parentB.Count);
+        var splitPoint = random.Next(0, minLen);
+
+        // Take head from A
+        for (var i = 0; i < splitPoint; i++)
+        {
+            child.Add(parentA[i]);
+        }
+
+        // Take tail from B
+        for (var i = splitPoint; i < parentB.Count; i++)
+        {
+            child.Add(parentB[i]);
+        }
+
+        return child;
     }
 
     private ITextModifier CreateRandomModifier(Random random)
@@ -142,37 +225,13 @@ public partial class DefaultGenomeFactory(IOptions<AppSettings> options, ILogger
         return new string(chars);
     }
 
-    public List<ITextModifier> Crossover(List<ITextModifier> parentA, List<ITextModifier> parentB)
-    {
-        // TODO: properly understand this code instead of cargo-culting it.
+    [LoggerMessage(LogLevel.Debug, "Source text mutation: {OldSourceTextId} -> {NewSourceTextId}")]
+    static partial void LogSourceTextMutation(ILogger<DefaultGenomeFactory> logger, SourceTextId oldSourceTextId, SourceTextId newSourceTextId);
 
-        var child = new List<ITextModifier>();
-        var random = new Random(options.Value.Seed);
+    [LoggerMessage(LogLevel.Debug, "Modifier mutation applied: Original={OriginalCount} modifiers")]
+    static partial void LogModifierMutation(ILogger<DefaultGenomeFactory> logger, int originalCount);
 
-        // Pick a split point based on the shorter parent to avoid index errors
-        var minLen = Math.Min(parentA.Count, parentB.Count);
-        var splitPoint = random.Next(0, minLen);
-
-        // Take head from A
-        for (var i = 0; i < splitPoint; i++)
-        {
-            child.Add(parentA[i]);
-        }
-
-        // Take tail from B
-        for (var i = splitPoint; i < parentB.Count; i++)
-        {
-            child.Add(parentB[i]);
-        }
-
-        LogCrossover(logger, parentA.Count, parentB.Count, splitPoint, child.Count);
-
-        return child;
-    }
-
-    [LoggerMessage(LogLevel.Debug, "Crossover: ParentA={parentACount}, ParentB={parentBCount}, SplitPoint={splitPoint} -> Child={childCount}")]
-    static partial void LogCrossover(ILogger<DefaultGenomeFactory> logger, int parentACount, int parentBCount, int splitPoint, int childCount);
-
-    [LoggerMessage(LogLevel.Debug, "Mutation applied: Original={originalCount} modifiers")]
-    static partial void LogMutation(ILogger<DefaultGenomeFactory> logger, int originalCount);
+    [LoggerMessage(LogLevel.Debug, "Crossover: ParentA={ParentACount} ({ParentASource}), ParentB={ParentBCount} ({ParentBSource}) -> Child={ChildCount} ({ChildSource})")]
+    static partial void LogCrossover(ILogger<DefaultGenomeFactory> logger, int parentACount, int parentBCount, int childCount,
+        SourceTextId parentASource, SourceTextId parentBSource, SourceTextId childSource);
 }

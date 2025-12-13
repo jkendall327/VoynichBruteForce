@@ -18,4 +18,8 @@
       </None>
     </ItemGroup>
 
+    <ItemGroup>
+      <EmbeddedResource Include="Sources\Texts\*.txt" />
+    </ItemGroup>
+
 </Project>

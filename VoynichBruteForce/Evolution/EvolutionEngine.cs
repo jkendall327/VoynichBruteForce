@@ -6,7 +6,7 @@ namespace VoynichBruteForce.Evolution;
 
 public partial class EvolutionEngine(
     PipelineRunner runner,
-    ITextProvider textProvider,
+    ISourceTextRegistry sourceTextRegistry,
     IGenomeFactory genomeFactory,
     ILogger<EvolutionEngine> logger)
 {
@@ -27,30 +27,32 @@ public partial class EvolutionEngine(
             ["MutationRate"] = MutationRate
         });
 
-        var sourceText = textProvider.GetText();
-        LogEvolutionStarted(logger, seed, PopulationSize, MaxGenerations, sourceText.Length);
+        LogEvolutionStarted(logger, seed, PopulationSize, MaxGenerations, sourceTextRegistry.AvailableIds.Count);
 
         // 1. Initialize Population (Gen 0)
-        var population = new List<Pipeline>();
+        var population = new List<Genome>();
 
         for (var i = 0; i < PopulationSize; i++)
         {
-            var modifiers = genomeFactory.CreateRandomGenome(length: 5);
-            population.Add(new(sourceText, modifiers));
+            var genome = genomeFactory.CreateRandomGenome(modifierCount: 5);
+            population.Add(genome);
         }
 
         LogPopulationInitialized(logger, PopulationSize);
 
         for (var gen = 0; gen < MaxGenerations; gen++)
         {
-            var rankedResults = new ConcurrentBag<(Pipeline Pipeline, PipelineResult Result)>();
+            var rankedResults = new ConcurrentBag<(Genome Genome, PipelineResult Result)>();
 
             // 2. Evaluate Fitness
             Parallel.ForEach(population,
-                pipeline =>
+                genome =>
                 {
-                    var result = runner.Run(pipeline);
-                    rankedResults.Add((pipeline, result));
+                    // Resolve genome to pipeline at evaluation time
+                    var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
+                    var pipeline = new Pipeline(sourceText, genome.Modifiers);
+                    var result = runner.Run(pipeline, genome.SourceTextId);
+                    rankedResults.Add((genome, result));
                 });
 
             // Order by lowest error (best fit)
@@ -81,12 +83,12 @@ public partial class EvolutionEngine(
             }
 
             // 3. Selection & Reproduction
-            var nextGen = new List<Pipeline>();
+            var nextGen = new List<Genome>();
 
             // Elitism: Keep the top 10% unchanged
             nextGen.AddRange(sorted
                 .Take(PopulationSize / 10)
-                .Select(x => x.Pipeline));
+                .Select(x => x.Genome));
 
             // Fill the rest with mutations of the top 50%
             var survivors = sorted
@@ -99,32 +101,32 @@ public partial class EvolutionEngine(
             {
                 // STEP A: Select two distinctive parents
                 // (Using random selection from the top 50% is a simple, effective strategy)
-                var parentA = survivors[random.Next(survivors.Count)].Pipeline;
-                var parentB = survivors[random.Next(survivors.Count)].Pipeline;
+                var parentA = survivors[random.Next(survivors.Count)].Genome;
+                var parentB = survivors[random.Next(survivors.Count)].Genome;
 
-                // Try to ensure we aren't breeding a parent with itself, 
+                // Try to ensure we aren't breeding a parent with itself,
                 // though in small pools it happens.
                 if (survivors.Count > 1)
                 {
                     while (parentB == parentA)
                     {
-                        parentB = survivors[random.Next(survivors.Count)].Pipeline;
+                        parentB = survivors[random.Next(survivors.Count)].Genome;
                     }
                 }
 
                 // STEP B: Crossover
-                // Create a child by mixing traits of A and B
-                var childModifiers = genomeFactory.Crossover(parentA.Modifiers, parentB.Modifiers);
+                // Create a child by mixing traits of A and B (both source text and modifiers)
+                var child = genomeFactory.Crossover(parentA, parentB);
 
                 // STEP C: Mutation (The "Spark" of novelty)
                 // Crossover rearranges existing solutions. Mutation finds new ones.
                 // We apply mutation probabilistically.
                 if (random.NextDouble() < MutationRate)
                 {
-                    childModifiers = genomeFactory.Mutate(childModifiers);
+                    child = genomeFactory.Mutate(child);
                 }
 
-                nextGen.Add(new(sourceText, childModifiers));
+                nextGen.Add(child);
             }
 
             population = nextGen;
@@ -133,18 +135,18 @@ public partial class EvolutionEngine(
         LogEvolutionCompleted(logger, MaxGenerations);
     }
 
-    [LoggerMessage(LogLevel.Information, "Starting evolution: Seed={seed}, Population={populationSize}, MaxGen={maxGenerations}, SourceTextLength={sourceTextLength}")]
-    static partial void LogEvolutionStarted(ILogger<EvolutionEngine> logger, int seed, int populationSize, int maxGenerations, int sourceTextLength);
+    [LoggerMessage(LogLevel.Information, "Starting evolution: Seed={Seed}, Population={PopulationSize}, MaxGen={MaxGenerations}, AvailableSourceTexts={SourceTextCount}")]
+    static partial void LogEvolutionStarted(ILogger<EvolutionEngine> logger, int seed, int populationSize, int maxGenerations, int sourceTextCount);
 
-    [LoggerMessage(LogLevel.Information, "Population initialized with {count} random genomes")]
+    [LoggerMessage(LogLevel.Information, "Population initialized with {Count} random genomes")]
     static partial void LogPopulationInitialized(ILogger<EvolutionEngine> logger, int count);
 
-    [LoggerMessage(LogLevel.Information, "Gen {gen}: Best={bestError:F6} (Avg={avgError:F6}, Worst={worstError:F6}) | {desc}")]
+    [LoggerMessage(LogLevel.Information, "Gen {Gen}: Best={BestError:F6} (Avg={AvgError:F6}, Worst={WorstError:F6}) | {Desc}")]
     static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger, int gen, string desc, double bestError, double avgError, double worstError);
 
-    [LoggerMessage(LogLevel.Information, "Evolution succeeded at generation {gen} with error {error:F6}")]
+    [LoggerMessage(LogLevel.Information, "Evolution succeeded at generation {Gen} with error {Error:F6}")]
     static partial void LogEvolutionSuccess(ILogger<EvolutionEngine> logger, int gen, double error);
 
-    [LoggerMessage(LogLevel.Information, "Evolution completed after {maxGenerations} generations")]
+    [LoggerMessage(LogLevel.Information, "Evolution completed after {MaxGenerations} generations")]
     static partial void LogEvolutionCompleted(ILogger<EvolutionEngine> logger, int maxGenerations);
 }
