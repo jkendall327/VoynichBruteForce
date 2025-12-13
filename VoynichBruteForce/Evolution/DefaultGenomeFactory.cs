@@ -216,7 +216,7 @@ public partial class DefaultGenomeFactory(
     {
         var mode = random.RandomEnumMember<AffixMode>();
 
-        return random.RandomEnumMember<AffixMode>() switch
+        return mode switch
         {
             AffixMode.AddPrefix or AffixMode.AddSuffix => new(mode, GenerateRandomString(random, 2, 4)),
             _ => new(mode)
