@@ -15,4 +15,10 @@ var settings = app.Services.GetRequiredService<IOptions<AppSettings>>();
 
 var engine = app.Services.GetRequiredService<EvolutionEngine>();
 
-engine.Evolve(settings.Value.Seed);
+var result = engine.Evolve(settings.Value.Seed);
+
+if (result is not null)
+{
+    var json = System.Text.Json.JsonSerializer.Serialize(result);
+    File.WriteAllText("result.json", json);
+}

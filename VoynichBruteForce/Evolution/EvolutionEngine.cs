@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VoynichBruteForce.Sources;
@@ -19,7 +18,7 @@ public partial class EvolutionEngine(
 
     private TimeSpan? _elapsedTotal;
 
-    public void Evolve(int seed)
+    public EvolutionResult? Evolve(int seed)
     {
         using var evolutionScope = logger.BeginScope(new Dictionary<string, object>
         {
@@ -53,7 +52,7 @@ public partial class EvolutionEngine(
             var rankedResults = new (Genome Genome, PipelineResult Result)[population.Count];
 
             var start = Stopwatch.GetTimestamp();
-            
+
             Parallel.For(0, population.Count, options, i =>
             {
                 var genome = population[i];
@@ -90,11 +89,8 @@ public partial class EvolutionEngine(
             if (best.Result.TotalErrorScore < 0.05)
             {
                 LogEvolutionSuccess(logger, gen, best.Result.TotalErrorScore);
-                
-                var json = JsonSerializer.Serialize(best.Result);
-                File.WriteAllText("result.json", json);
-                
-                break;
+
+                return new EvolutionResult(best.Result, best.Genome, gen, _elapsedTotal.Value);
             }
 
             // 3. Selection & Reproduction
@@ -148,6 +144,8 @@ public partial class EvolutionEngine(
         }
 
         LogEvolutionCompleted(logger, _hyperparameters.MaxGenerations);
+
+        return null;
     }
 
     [LoggerMessage(LogLevel.Information, "Starting evolution: Seed={Seed}, Population={PopulationSize}, MaxGen={MaxGenerations}, AvailableSourceTexts={SourceTextCount}")]

@@ -16,7 +16,7 @@ public class EvolutionEngineTests
 
         services.AddVoynichConfiguration(configuration);
         services.AddVoynichServices();
-        
+
         var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
         {
             ValidateOnBuild = true,
@@ -24,8 +24,11 @@ public class EvolutionEngineTests
         });
 
         var engine = serviceProvider.GetRequiredService<EvolutionEngine>();
-        
-        engine.Evolve(1);
+
+        var result = engine.Evolve(1);
+
+        // Result may be null if no sufficiently good solution was found within MaxGenerations
+        // This test simply verifies that evolution completes successfully
     }
 
     private static IConfiguration BuildTestConfiguration()
