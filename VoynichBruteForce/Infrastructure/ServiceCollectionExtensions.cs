@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VoynichBruteForce.Evolution;
+using VoynichBruteForce.Modifications;
 using VoynichBruteForce.Rankings;
 using VoynichBruteForce.Sources;
 
@@ -18,6 +19,20 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<RandomFactory>();
             services.AddSingleton<PipelineRunner>();
             services.AddSingleton<EvolutionEngine>();
+
+            services.AddSingleton<IModifierFactory, CaesarCipherModifierFactory>();
+            services.AddSingleton<IModifierFactory, AtbashCipherModifierFactory>();
+            services.AddSingleton<IModifierFactory, VowelRemovalModifierFactory>();
+            services.AddSingleton<IModifierFactory, PositionalExtractionModifierFactory>();
+            services.AddSingleton<IModifierFactory, NullInsertionModifierFactory>();
+            services.AddSingleton<IModifierFactory, LetterDoublingModifierFactory>();
+            services.AddSingleton<IModifierFactory, AnagramModifierFactory>();
+            services.AddSingleton<IModifierFactory, AffixModifierFactory>();
+            services.AddSingleton<IModifierFactory, ConsonantVowelSplitModifierFactory>();
+            services.AddSingleton<IModifierFactory, ColumnarTranspositionModifierFactory>();
+            services.AddSingleton<IModifierFactory, SkipCipherModifierFactory>();
+            services.AddSingleton<IModifierFactory, InterleaveModifierFactory>();
+            services.AddSingleton<IModifierFactory, WordReversalModifierFactory>();
         }
 
         public void AddVoynichConfiguration(IConfiguration configuration)

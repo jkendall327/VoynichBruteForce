@@ -5,33 +5,30 @@ using VoynichBruteForce.Sources;
 
 namespace VoynichBruteForce.Evolution;
 
-public partial class DefaultGenomeFactory(
-    RandomFactory randomFactory,
-    ISourceTextRegistry sourceTextRegistry,
-    ILogger<DefaultGenomeFactory> logger) : IGenomeFactory
+public partial class DefaultGenomeFactory : IGenomeFactory
 {
-    private static readonly Type[] ModifierTypes =
-    [
-        typeof(CaesarCipherModifier),
-        typeof(AtbashCipherModifier),
-        typeof(VowelRemovalModifier),
-        typeof(PositionalExtractionModifier),
-        typeof(NullInsertionModifier),
-        typeof(LetterDoublingModifier),
-        typeof(AnagramModifier),
-        typeof(AffixModifier),
-        typeof(ConsonantVowelSplitModifier),
-        typeof(ColumnarTranspositionModifier),
-        typeof(SkipCipherModifier),
-        typeof(InterleaveModifier),
-        typeof(WordReversalModifier)
-    ];
+    private readonly RandomFactory _randomFactory;
+    private readonly ISourceTextRegistry _sourceTextRegistry;
+    private readonly ILogger<DefaultGenomeFactory> _logger;
+    private readonly IModifierFactory[] _modifierFactories;
+
+    public DefaultGenomeFactory(
+        RandomFactory randomFactory,
+        ISourceTextRegistry sourceTextRegistry,
+        IEnumerable<IModifierFactory> modifierFactories,
+        ILogger<DefaultGenomeFactory> logger)
+    {
+        _randomFactory = randomFactory;
+        _sourceTextRegistry = sourceTextRegistry;
+        _modifierFactories = modifierFactories.ToArray();
+        _logger = logger;
+    }
 
     public Genome CreateRandomGenome(int modifierCount)
     {
-        var random = randomFactory.GetRandom();
+        var random = _randomFactory.GetRandom();
 
-        var sourceTextId = sourceTextRegistry.GetRandomId(random);
+        var sourceTextId = _sourceTextRegistry.GetRandomId(random);
         var modifiers = CreateRandomModifiers(random, modifierCount);
 
         return new(sourceTextId, modifiers);
@@ -39,7 +36,7 @@ public partial class DefaultGenomeFactory(
 
     public Genome Mutate(Genome original)
     {
-        var random = randomFactory.GetRandom();
+        var random = _randomFactory.GetRandom();
 
         var mutationTarget = random.RandomEnumMember<MutationTarget>();
 
@@ -50,8 +47,8 @@ public partial class DefaultGenomeFactory(
         {
             // Mutate source text: pick a different source
             var oldSourceTextId = newSourceTextId;
-            newSourceTextId = sourceTextRegistry.GetRandomId(random);
-            LogSourceTextMutation(logger, oldSourceTextId, newSourceTextId);
+            newSourceTextId = _sourceTextRegistry.GetRandomId(random);
+            LogSourceTextMutation(_logger, oldSourceTextId, newSourceTextId);
         }
 
         if (mutationTarget is MutationTarget.Modifiers or MutationTarget.Both)
@@ -65,7 +62,7 @@ public partial class DefaultGenomeFactory(
 
     public Genome Crossover(Genome parentA, Genome parentB)
     {
-        var random = randomFactory.GetRandom();
+        var random = _randomFactory.GetRandom();
 
         // Source text: 50/50 uniform crossover (standard for categorical genes)
         var childSourceTextId = random.Next(2) == 0 ? parentA.SourceTextId : parentB.SourceTextId;
@@ -73,7 +70,7 @@ public partial class DefaultGenomeFactory(
         // Modifiers: existing single-point crossover logic
         var childModifiers = CrossoverModifiers(parentA.Modifiers, parentB.Modifiers, random);
 
-        LogCrossover(logger,
+        LogCrossover(_logger,
             parentA.Modifiers.Count,
             parentB.Modifiers.Count,
             childModifiers.Count,
@@ -153,7 +150,7 @@ public partial class DefaultGenomeFactory(
                 break;
         }
 
-        LogModifierMutation(logger, original.Count);
+        LogModifierMutation(_logger, original.Count);
 
         return mutated;
     }
@@ -185,71 +182,8 @@ public partial class DefaultGenomeFactory(
 
     private ITextModifier CreateRandomModifier(Random random)
     {
-        var type = ModifierTypes[random.Next(ModifierTypes.Length)];
-
-        return type.Name switch
-        {
-            nameof(CaesarCipherModifier) => new CaesarCipherModifier(random.Next(26)),
-            nameof(AtbashCipherModifier) => new AtbashCipherModifier(),
-            nameof(VowelRemovalModifier) => new VowelRemovalModifier(),
-            nameof(PositionalExtractionModifier) => new PositionalExtractionModifier(random.Next(2, 5)),
-            nameof(NullInsertionModifier) => new NullInsertionModifier((char)('a' + random.Next(26)),
-                random.Next(3, 10)),
-            nameof(LetterDoublingModifier) => new LetterDoublingModifier(),
-            nameof(AnagramModifier) => new AnagramModifier((AnagramMode)random.Next(Enum.GetValues<AnagramMode>()
-                    .Length),
-                random.Next(1000)),
-            nameof(AffixModifier) => CreateRandomAffixModifier(random),
-            nameof(ConsonantVowelSplitModifier) => new ConsonantVowelSplitModifier(),
-            nameof(ColumnarTranspositionModifier) => new ColumnarTranspositionModifier(
-                GenerateRandomColumnOrder(random, random.Next(3, 7))),
-            nameof(SkipCipherModifier) => new SkipCipherModifier(random.Next(2, 5)),
-            nameof(InterleaveModifier) => new InterleaveModifier(random.Next(2) == 0
-                ? InterleaveMode.HalvesAlternate
-                : InterleaveMode.OddEvenSplit),
-            nameof(WordReversalModifier) => new WordReversalModifier(),
-            _ => throw new InvalidOperationException($"Unknown modifier type: {type.Name}")
-        };
-    }
-
-    private static AffixModifier CreateRandomAffixModifier(Random random)
-    {
-        var mode = random.RandomEnumMember<AffixMode>();
-
-        return mode switch
-        {
-            AffixMode.AddPrefix or AffixMode.AddSuffix => new(mode, GenerateRandomString(random, 2, 4)),
-            _ => new(mode)
-        };
-    }
-
-    private static int[] GenerateRandomColumnOrder(Random random, int length)
-    {
-        var order = Enumerable
-            .Range(0, length)
-            .ToArray();
-
-        // Fisher-Yates shuffle
-        for (var i = order.Length - 1; i > 0; i--)
-        {
-            var j = random.Next(i + 1);
-            (order[i], order[j]) = (order[j], order[i]);
-        }
-
-        return order;
-    }
-
-    private static string GenerateRandomString(Random random, int minLength, int maxLength)
-    {
-        var length = random.Next(minLength, maxLength + 1);
-        var chars = new char[length];
-
-        for (var i = 0; i < length; i++)
-        {
-            chars[i] = (char)('a' + random.Next(26));
-        }
-
-        return new(chars);
+        var factory = _modifierFactories[random.Next(_modifierFactories.Length)];
+        return factory.CreateRandom(random);
     }
 
     [LoggerMessage(LogLevel.Debug, "Source text mutation: {OldSourceTextId} -> {NewSourceTextId}")]
