@@ -15,9 +15,9 @@ public class SingleCharEntropyRanker(IOptions<VoynichProfile> profile) : IRuleAd
 
     public RuleWeight Weight => RuleWeight.Standard;
 
-    public RankerResult CalculateRank(string text)
+    public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        double actualH1 = ComputeH1(text);
+        double actualH1 = ComputeH1(analysis.CharFrequencies);
 
         double rawDelta = Math.Abs(actualH1 - _profile.TargetH1Entropy);
 
@@ -28,29 +28,14 @@ public class SingleCharEntropyRanker(IOptions<VoynichProfile> profile) : IRuleAd
         return new(Name, actualH1, _profile.TargetH1Entropy, normalizedError, Weight);
     }
 
-    private double ComputeH1(string text)
+    private static double ComputeH1(Dictionary<char, int> charFrequencies)
     {
-        if (string.IsNullOrEmpty(text))
+        if (charFrequencies.Count == 0)
             return 0;
 
-        // Count character frequencies (excluding whitespace)
-        var charFrequencies = new Dictionary<char, int>();
         int totalChars = 0;
-
-        foreach (char c in text)
-        {
-            // Skip whitespace
-            if (char.IsWhiteSpace(c))
-                continue;
-
-            char normalized = char.ToLowerInvariant(c);
-            if (charFrequencies.ContainsKey(normalized))
-                charFrequencies[normalized]++;
-            else
-                charFrequencies[normalized] = 1;
-
-            totalChars++;
-        }
+        foreach (var count in charFrequencies.Values)
+            totalChars += count;
 
         if (totalChars == 0)
             return 0;

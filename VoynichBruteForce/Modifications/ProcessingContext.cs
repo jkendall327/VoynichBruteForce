@@ -68,7 +68,7 @@ public ref struct ProcessingContext
         initialText.CopyTo(_sourceBuffer.AsSpan());
         CurrentLength = initialText.Length;
     }
-    
+
     /// <summary>
     /// Ensures both ping-pong buffers have at least <paramref name="required"/> capacity.
     /// Copies the current input (CurrentLength chars) into the new source buffer.

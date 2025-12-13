@@ -41,7 +41,7 @@ public class ReverseInterleaveModifier : ISpanTextModifier
         {
             // Even indexes come from forward pass of the input.
             output[2 * i] = input[i];
-            
+
             // Odd indexes from reverse pass of the input.
             output[2 * i + 1] = input[n - 1 - i];
         }

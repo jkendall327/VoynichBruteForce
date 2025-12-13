@@ -14,9 +14,9 @@ public class RepeatedAdjacentWordsRanker(IOptions<VoynichProfile> profile) : IRu
 
     public RuleWeight Weight => RuleWeight.Standard;
 
-    public RankerResult CalculateRank(string text)
+    public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        var words = analysis.Words;
 
         if (words.Length < 2)
         {

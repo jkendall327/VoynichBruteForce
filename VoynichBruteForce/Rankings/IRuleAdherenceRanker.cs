@@ -14,5 +14,9 @@ public interface IRuleAdherenceRanker
     /// </summary>
     RuleWeight Weight { get; }
 
-    RankerResult CalculateRank(string text);
+    /// <summary>
+    /// Calculates how well the text adheres to this rule.
+    /// </summary>
+    /// <param name="analysis">Pre-computed text analysis to avoid redundant parsing.</param>
+    RankerResult CalculateRank(PrecomputedTextAnalysis analysis);
 }

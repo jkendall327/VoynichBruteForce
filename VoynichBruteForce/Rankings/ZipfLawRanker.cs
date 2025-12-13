@@ -15,24 +15,16 @@ public class ZipfLawRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRan
 
     public RuleWeight Weight => RuleWeight.High;
 
-    public RankerResult CalculateRank(string text)
+    public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        var words = analysis.Words;
 
         if (words.Length < 10)
         {
             return new(Name, 0, _profile.TargetZipfSlope, double.MaxValue, Weight);
         }
 
-        // Count word frequencies
-        var frequencyMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var word in words)
-        {
-            if (frequencyMap.ContainsKey(word))
-                frequencyMap[word]++;
-            else
-                frequencyMap[word] = 1;
-        }
+        var frequencyMap = analysis.WordFrequencies;
 
         // Sort by frequency descending
         var sortedFrequencies = frequencyMap

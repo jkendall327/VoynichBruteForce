@@ -11,9 +11,9 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
     // This is critical because low H2 is the Voynich's defining feature
     public RuleWeight Weight => RuleWeight.Critical;
 
-    public RankerResult CalculateRank(string text)
+    public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var actualH2 = ComputeH2(text);
+        var actualH2 = ComputeH2(analysis.Bigrams);
 
         var rawDelta = Math.Abs(actualH2 - _profile.TargetH2Entropy);
 
@@ -29,48 +29,18 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
         return new(Name, actualH2, _profile.TargetH2Entropy, normalizedError, Weight);
     }
 
-    private double ComputeH2(string text)
+    private static double ComputeH2(BigramData bigrams)
     {
-        if (string.IsNullOrEmpty(text) || text.Length < 2)
+        if (bigrams.TotalBigrams < 1)
             return 0;
 
-        // Build bigram frequency table: Dictionary<char, Dictionary<char, int>>
-        // Outer key: previous character, Inner key: current character, Value: count
-        var bigramCounts = new Dictionary<char, Dictionary<char, int>>();
-        var charCounts = new Dictionary<char, int>();
-
-        // Normalize text and filter whitespace using Span to avoid LINQ allocations
-        var cleanedText = CleanText(text);
-
-        if (cleanedText.Length < 2)
-            return 0;
-
-        // Count bigrams and individual characters
-        for (int i = 0; i < cleanedText.Length - 1; i++)
-        {
-            char prevChar = cleanedText[i];
-            char currChar = cleanedText[i + 1];
-
-            // Count bigrams
-            if (!bigramCounts.ContainsKey(prevChar))
-                bigramCounts[prevChar] = new Dictionary<char, int>();
-
-            if (bigramCounts[prevChar].ContainsKey(currChar))
-                bigramCounts[prevChar][currChar]++;
-            else
-                bigramCounts[prevChar][currChar] = 1;
-
-            // Count individual characters (for probability calculation)
-            if (charCounts.ContainsKey(prevChar))
-                charCounts[prevChar]++;
-            else
-                charCounts[prevChar] = 1;
-        }
+        var bigramCounts = bigrams.BigramCounts;
+        var charCounts = bigrams.PrevCharCounts;
+        int totalChars = bigrams.TotalBigrams;
 
         // Calculate conditional entropy: H2 = Σ P(c1) * H(c2|c1)
         // H(c2|c1) = -Σ P(c2|c1) * log₂(P(c2|c1))
         double h2 = 0;
-        int totalChars = cleanedText.Length - 1;
 
         foreach (var prevChar in bigramCounts.Keys)
         {
@@ -89,30 +59,5 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
         }
 
         return h2;
-    }
-
-    private static string CleanText(string text)
-    {
-        // First pass: count non-whitespace characters
-        var count = 0;
-        foreach (var c in text)
-        {
-            if (!char.IsWhiteSpace(c))
-                count++;
-        }
-
-        if (count == 0)
-            return string.Empty;
-
-        // Allocate exact size and fill with lowercased chars
-        Span<char> buffer = count <= 256 ? stackalloc char[count] : new char[count];
-        var index = 0;
-        foreach (var c in text)
-        {
-            if (!char.IsWhiteSpace(c))
-                buffer[index++] = char.ToLowerInvariant(c);
-        }
-
-        return new string(buffer);
     }
 }

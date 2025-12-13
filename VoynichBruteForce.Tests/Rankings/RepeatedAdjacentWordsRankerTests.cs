@@ -7,12 +7,14 @@ public class RepeatedAdjacentWordsRankerTests
 {
     private static RepeatedAdjacentWordsRanker CreateRanker() => new(Options.Create(new VoynichProfile()));
 
+    private static PrecomputedTextAnalysis Analyze(string text) => new(text);
+
     [Fact]
     public void CalculateRank_WithNoRepetitions_ReturnsZeroRatio()
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("the quick brown fox jumps over lazy dog");
+        var result = ranker.CalculateRank(Analyze("the quick brown fox jumps over lazy dog"));
 
         Assert.Equal(0.0, result.RawMeasuredValue);
     }
@@ -23,7 +25,7 @@ public class RepeatedAdjacentWordsRankerTests
         var ranker = CreateRanker();
 
         // "the the" is one repetition out of 4 words = 1/4 = 0.25
-        var result = ranker.CalculateRank("the the cat dog");
+        var result = ranker.CalculateRank(Analyze("the the cat dog"));
 
         Assert.Equal(0.25, result.RawMeasuredValue, precision: 2);
     }
@@ -34,7 +36,7 @@ public class RepeatedAdjacentWordsRankerTests
         var ranker = CreateRanker();
 
         // "word word" and "test test" = 2 repetitions out of 6 words = 2/6 ≈ 0.333
-        var result = ranker.CalculateRank("word word test test hello world");
+        var result = ranker.CalculateRank(Analyze("word word test test hello world"));
 
         Assert.Equal(0.333, result.RawMeasuredValue, precision: 2);
     }
@@ -44,7 +46,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("The THE cat CAT");
+        var result = ranker.CalculateRank(Analyze("The THE cat CAT"));
 
         // 2 repetitions out of 4 words = 0.5
         Assert.Equal(0.5, result.RawMeasuredValue);
@@ -55,7 +57,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("");
+        var result = ranker.CalculateRank(Analyze(""));
 
         Assert.Equal(0.0, result.RawMeasuredValue);
     }
@@ -65,7 +67,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("hello");
+        var result = ranker.CalculateRank(Analyze("hello"));
 
         Assert.Equal(0.0, result.RawMeasuredValue);
     }
@@ -75,7 +77,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("word\tword\ntest\rtest");
+        var result = ranker.CalculateRank(Analyze("word\tword\ntest\rtest"));
 
         // 2 repetitions out of 4 words = 0.5
         Assert.Equal(0.5, result.RawMeasuredValue);
@@ -86,7 +88,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("test test");
+        var result = ranker.CalculateRank(Analyze("test test"));
 
         Assert.Equal("Repeated Adjacent Words", result.RuleName);
     }
@@ -96,7 +98,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("test test");
+        var result = ranker.CalculateRank(Analyze("test test"));
 
         Assert.Equal(new VoynichProfile().TargetRepeatedAdjacentWordsRatio, result.TargetValue);
     }
@@ -106,7 +108,7 @@ public class RepeatedAdjacentWordsRankerTests
     {
         var ranker = CreateRanker();
 
-        var result = ranker.CalculateRank("word word word"); // 2/3 ≈ 0.667
+        var result = ranker.CalculateRank(Analyze("word word word")); // 2/3 ≈ 0.667
 
         // Should have a non-zero normalized error since 0.667 != target
         Assert.True(result.NormalizedError > 0);

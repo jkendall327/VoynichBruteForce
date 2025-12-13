@@ -10,10 +10,10 @@ public class ReverseInterleaveModifierTests
         var sut = new ReverseInterleaveModifier();
 
         var result = sut.ModifyText("A");
-        
+
         Assert.Equal("AA", result);
     }
-    
+
     [Theory]
     [InlineData("ABC", "ACBBCA")]
     public void Modify_WithString_ReversesAndInterleaves(string source, string expected)
@@ -21,7 +21,7 @@ public class ReverseInterleaveModifierTests
         var sut = new ReverseInterleaveModifier();
 
         var result = sut.ModifyText(source);
-        
+
         Assert.Equal(expected, result);
     }
 }

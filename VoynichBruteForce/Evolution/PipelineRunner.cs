@@ -72,9 +72,10 @@ public partial class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyp
         }
 
         var rankers = rankerProvider.GetRankers();
+        var analysis = new PrecomputedTextAnalysis(resultText);
 
         var results = rankers
-            .Select(ranker => ranker.CalculateRank(resultText))
+            .Select(ranker => ranker.CalculateRank(analysis))
             .ToList();
 
         return new(sourceTextId, modifiers, results, _hyperparameters);

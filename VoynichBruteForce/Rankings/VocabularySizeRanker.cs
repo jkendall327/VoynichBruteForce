@@ -14,17 +14,18 @@ public class VocabularySizeRanker(IOptions<VoynichProfile> profile) : IRuleAdher
 
     public RuleWeight Weight => RuleWeight.Standard;
 
-    public RankerResult CalculateRank(string text)
+    public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        var words = analysis.Words;
 
         if (words.Length == 0)
         {
             return new(Name, 0, _profile.TargetTypeTokenRatio, 0, Weight);
         }
 
-        var uniqueWords = new HashSet<string>(words, StringComparer.OrdinalIgnoreCase);
-        double typeTokenRatio = (double)uniqueWords.Count / words.Length;
+        // Unique words count is the number of entries in the word frequency map
+        int uniqueWordCount = analysis.WordFrequencies.Count;
+        double typeTokenRatio = (double)uniqueWordCount / words.Length;
 
         double rawDelta = Math.Abs(typeTokenRatio - _profile.TargetTypeTokenRatio);
 
