@@ -91,7 +91,7 @@ public class SkipCipherModifier : ISpanTextModifier, IPerturbable
     public ITextModifier Perturb(Random random)
     {
         // Adjust skip by ±1 (minimum 2)
-        var delta = random.Next(2) == 0 ? 1 : -1;
+        var delta = random.NextBool() ? 1 : -1;
         var newSkip = Math.Max(2, _skip + delta);
         return new SkipCipherModifier(newSkip);
     }

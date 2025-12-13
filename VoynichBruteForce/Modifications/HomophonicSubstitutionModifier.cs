@@ -153,8 +153,8 @@ public class HomophonicSubstitutionModifier : ITextModifier
                 else
                 {
                     // If we run out, use two-character combinations
-                    subs[i] = symbolPool[random.Next(symbolPool.Count)].ToString() +
-                              symbolPool[random.Next(symbolPool.Count)].ToString();
+                    subs[i] = random.NextItem(symbolPool).ToString() +
+                              random.NextItem(symbolPool).ToString();
                 }
             }
 

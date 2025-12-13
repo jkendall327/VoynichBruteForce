@@ -150,8 +150,8 @@ public partial class EvolutionEngine(
                 {
                     // STEP A: Select two distinctive parents
                     // (Using random selection from the top 50% is a simple, effective strategy)
-                    var parentA = survivors[random.Next(survivors.Count)].Genome;
-                    var parentB = survivors[random.Next(survivors.Count)].Genome;
+                    var parentA = random.NextItem(survivors).Genome;
+                    var parentB = random.NextItem(survivors).Genome;
 
                     // Try to ensure we aren't breeding a parent with itself,
                     // though in small pools it happens.
@@ -159,7 +159,7 @@ public partial class EvolutionEngine(
                     {
                         while (parentB == parentA)
                         {
-                            parentB = survivors[random.Next(survivors.Count)].Genome;
+                            parentB = random.NextItem(survivors).Genome;
                         }
                     }
 

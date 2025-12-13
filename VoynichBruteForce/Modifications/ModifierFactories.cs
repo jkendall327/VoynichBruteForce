@@ -23,7 +23,7 @@ public sealed class PositionalExtractionModifierFactory : IModifierFactory
 public sealed class NullInsertionModifierFactory : IModifierFactory
 {
     public ITextModifier CreateRandom(Random random) =>
-        new NullInsertionModifier((char)('a' + random.Next(26)), random.Next(3, 10));
+        new NullInsertionModifier(random.NextChar('a', 26), random.Next(3, 10));
 }
 
 public sealed class LetterDoublingModifierFactory : IModifierFactory
@@ -35,7 +35,7 @@ public sealed class AnagramModifierFactory : IModifierFactory
 {
     public ITextModifier CreateRandom(Random random) =>
         new AnagramModifier(
-            (AnagramMode)random.Next(Enum.GetValues<AnagramMode>().Length),
+            random.RandomEnumMember<AnagramMode>(),
             random.Next(1000));
 }
 
@@ -59,7 +59,7 @@ public sealed class AffixModifierFactory : IModifierFactory
 
         for (var i = 0; i < length; i++)
         {
-            chars[i] = (char)('a' + random.Next(26));
+            chars[i] = random.NextChar('a', 26);
         }
 
         return new string(chars);
@@ -98,7 +98,7 @@ public sealed class SkipCipherModifierFactory : IModifierFactory
 public sealed class InterleaveModifierFactory : IModifierFactory
 {
     public ITextModifier CreateRandom(Random random) =>
-        new InterleaveModifier(random.Next(2) == 0
+        new InterleaveModifier(random.NextBool()
             ? InterleaveMode.HalvesAlternate
             : InterleaveMode.OddEvenSplit);
 }

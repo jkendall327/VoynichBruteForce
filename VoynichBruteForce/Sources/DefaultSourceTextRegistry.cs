@@ -14,14 +14,14 @@ public class DefaultSourceTextRegistry : ISourceTextRegistry
 
     public IReadOnlyList<SourceTextId> AvailableIds { get; }
 
-    public DefaultSourceTextRegistry()
+    public DefaultSourceTextRegistry(RandomFactory randomFactory)
     {
         AvailableIds = Enum.GetValues<SourceTextId>().ToList().AsReadOnly();
 
         _textCache = new Dictionary<SourceTextId, Lazy<string>>
         {
             // Asemic generators (existing providers)
-            [SourceTextId.Random] = new(() => new RandomTextProvider().GetText()),
+            [SourceTextId.Random] = new(() => new RandomTextProvider(randomFactory.GetRandom()).GetText()),
             [SourceTextId.LullianCombinator] = new(() => new LullianCombinatorTextProvider().GetText()),
             [SourceTextId.ArithmeticSequence] = new(() => new ArithmeticSequenceTextProvider().GetText()),
             [SourceTextId.SyllableTable] = new(() => new SyllableTableTextProvider().GetText()),
@@ -38,7 +38,7 @@ public class DefaultSourceTextRegistry : ISourceTextRegistry
     public string GetText(SourceTextId id) => _textCache[id].Value;
 
     public SourceTextId GetRandomId(Random random)
-        => AvailableIds[random.Next(AvailableIds.Count)];
+        => random.NextItem(AvailableIds);
 
     private static string LoadEmbeddedResource(string fileName)
     {

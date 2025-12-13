@@ -65,7 +65,7 @@ public partial class DefaultGenomeFactory : IGenomeFactory
         var random = _randomFactory.GetRandom();
 
         // Source text: 50/50 uniform crossover (standard for categorical genes)
-        var childSourceTextId = random.Next(2) == 0 ? parentA.SourceTextId : parentB.SourceTextId;
+        var childSourceTextId = random.NextBool() ? parentA.SourceTextId : parentB.SourceTextId;
 
         // Modifiers: existing single-point crossover logic
         var childModifiers = CrossoverModifiers(parentA.Modifiers, parentB.Modifiers, random);
@@ -141,7 +141,7 @@ public partial class DefaultGenomeFactory : IGenomeFactory
 
                 if (perturbableIndices.Count > 0)
                 {
-                    var index = perturbableIndices[random.Next(perturbableIndices.Count)];
+                    var index = random.NextItem(perturbableIndices);
                     var perturbable = (IPerturbable)mutated[index];
                     mutated[index] = perturbable.Perturb(random);
                 }
@@ -182,7 +182,7 @@ public partial class DefaultGenomeFactory : IGenomeFactory
 
     private ITextModifier CreateRandomModifier(Random random)
     {
-        var factory = _modifierFactories[random.Next(_modifierFactories.Length)];
+        var factory = random.NextItem(_modifierFactories);
         return factory.CreateRandom(random);
     }
 

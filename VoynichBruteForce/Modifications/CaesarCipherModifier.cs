@@ -50,8 +50,8 @@ public class CaesarCipherModifier : ISpanTextModifier, IPerturbable
     public ITextModifier Perturb(Random random)
     {
         // Shift by ±1 or ±2, wrapping around 0-25
-        var delta = random.Next(2) == 0 ? 1 : 2;
-        if (random.Next(2) == 0) delta = -delta;
+        var delta = random.NextBool() ? 1 : 2;
+        if (random.NextBool()) delta = -delta;
 
         var newShift = ((_shift + delta) % 26 + 26) % 26;
         return new CaesarCipherModifier(newShift);

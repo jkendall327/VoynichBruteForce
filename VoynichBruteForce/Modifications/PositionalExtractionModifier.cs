@@ -101,10 +101,10 @@ public class PositionalExtractionModifier : ISpanTextModifier, IPerturbable
     public ITextModifier Perturb(Random random)
     {
         // Either adjust position by ±1 or toggle fromEnd
-        if (random.Next(2) == 0)
+        if (random.NextBool())
         {
             // Adjust position (minimum 0)
-            var delta = random.Next(2) == 0 ? 1 : -1;
+            var delta = random.NextBool() ? 1 : -1;
             var newPosition = Math.Max(0, _position + delta);
             return new PositionalExtractionModifier(newPosition, _fromEnd);
         }

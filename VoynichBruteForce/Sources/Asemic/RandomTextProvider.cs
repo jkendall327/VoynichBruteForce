@@ -17,8 +17,8 @@ public class RandomTextProvider : ITextProvider
     /// Creates a random text provider with default parameters.
     /// Uses a simplified Latin alphabet typical of medieval manuscripts.
     /// </summary>
-    public RandomTextProvider() : this(
-        seed: null,
+    public RandomTextProvider(Random random) : this(
+        random: random,
         alphabet: "abcdefghilmnopqrstuvxyz", // Medieval Latin alphabet (no j, k, w)
         wordCount: 100,
         minWordLength: 2,
@@ -29,14 +29,14 @@ public class RandomTextProvider : ITextProvider
     /// <summary>
     /// Creates a random text provider with custom parameters.
     /// </summary>
-    /// <param name="seed">Random seed for reproducibility (null for random)</param>
+    /// <param name="random">Random generator to use</param>
     /// <param name="alphabet">Character set to draw from</param>
     /// <param name="wordCount">Number of words to generate</param>
     /// <param name="minWordLength">Minimum word length</param>
     /// <param name="maxWordLength">Maximum word length</param>
-    public RandomTextProvider(int? seed, string alphabet, int wordCount, int minWordLength, int maxWordLength)
+    public RandomTextProvider(Random random, string alphabet, int wordCount, int minWordLength, int maxWordLength)
     {
-        _random = seed.HasValue ? new Random(seed.Value) : new Random();
+        _random = random;
         _alphabet = alphabet.ToCharArray();
         _wordCount = wordCount;
         _minWordLength = minWordLength;
@@ -54,7 +54,7 @@ public class RandomTextProvider : ITextProvider
 
             for (int j = 0; j < wordLength; j++)
             {
-                wordChars[j] = _alphabet[_random.Next(_alphabet.Length)];
+                wordChars[j] = _random.NextItem(_alphabet);
             }
 
             words.Add(new string(wordChars));

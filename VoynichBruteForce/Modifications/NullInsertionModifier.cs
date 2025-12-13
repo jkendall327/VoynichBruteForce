@@ -63,17 +63,17 @@ public class NullInsertionModifier : ISpanTextModifier, IPerturbable
     public ITextModifier Perturb(Random random)
     {
         // Either adjust interval by ±1 or shift the null char by ±1
-        if (random.Next(2) == 0)
+        if (random.NextBool())
         {
             // Adjust interval (minimum 1)
-            var delta = random.Next(2) == 0 ? 1 : -1;
+            var delta = random.NextBool() ? 1 : -1;
             var newInterval = Math.Max(1, _interval + delta);
             return new NullInsertionModifier(_nullChar, newInterval);
         }
         else
         {
             // Shift null char by ±1 within a-z range
-            var delta = random.Next(2) == 0 ? 1 : -1;
+            var delta = random.NextBool() ? 1 : -1;
             var newChar = (char)('a' + (((_nullChar - 'a') + delta) % 26 + 26) % 26);
             return new NullInsertionModifier(newChar, _interval);
         }
