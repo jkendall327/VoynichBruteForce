@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VoynichBruteForce.Sources;
@@ -14,6 +15,8 @@ public partial class EvolutionEngine(
 {
     private readonly Hyperparameters _hyperparameters = hyperparameters.Value;
 
+    private TimeSpan? _elapsedTotal;
+    
     public void Evolve(int seed)
     {
         using var evolutionScope = logger.BeginScope(new Dictionary<string, object>
@@ -41,6 +44,8 @@ public partial class EvolutionEngine(
         {
             var rankedResults = new ConcurrentBag<(Genome Genome, PipelineResult Result)>();
 
+            var start = Stopwatch.GetTimestamp();
+            
             // 2. Evaluate Fitness
             Parallel.ForEach(population,
                 genome =>
@@ -52,6 +57,17 @@ public partial class EvolutionEngine(
                     rankedResults.Add((genome, result));
                 });
 
+            var elapsed = Stopwatch.GetElapsedTime(start);
+
+            if (_elapsedTotal is null)
+            {
+                _elapsedTotal = elapsed;
+            }
+            else
+            {
+                _elapsedTotal += elapsed;
+            }
+            
             // Order by lowest error (best fit)
             var sorted = rankedResults
                 .OrderBy(x => x.Result.TotalErrorScore)
@@ -61,17 +77,8 @@ public partial class EvolutionEngine(
             var worst = sorted.Last();
             var avgError = sorted.Average(x => x.Result.TotalErrorScore);
 
-            using (logger.BeginScope(new Dictionary<string, object>
-            {
-                ["Generation"] = gen,
-                ["BestError"] = best.Result.TotalErrorScore,
-                ["AvgError"] = avgError,
-                ["WorstError"] = worst.Result.TotalErrorScore
-            }))
-            {
-                LogGenerationInfo(logger, gen, best.Result.PipelineDescription,
-                    best.Result.TotalErrorScore, avgError, worst.Result.TotalErrorScore);
-            }
+            LogGenerationInfo(logger, gen, best.Result.PipelineDescription,
+                best.Result.TotalErrorScore, avgError, worst.Result.TotalErrorScore, elapsed, _elapsedTotal.Value);
 
             if (best.Result.TotalErrorScore < 0.05)
             {
@@ -138,8 +145,15 @@ public partial class EvolutionEngine(
     [LoggerMessage(LogLevel.Information, "Population initialized with {Count} random genomes")]
     static partial void LogPopulationInitialized(ILogger<EvolutionEngine> logger, int count);
 
-    [LoggerMessage(LogLevel.Information, "Gen {Gen}: Best={BestError:F6} (Avg={AvgError:F6}, Worst={WorstError:F6}) | {Desc}")]
-    static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger, int gen, string desc, double bestError, double avgError, double worstError);
+    [LoggerMessage(LogLevel.Information, "Gen {gen} ({Elapsed}/{ElapsedTotal}): Best={BestError:F2} (Avg={AvgError:F2}, Worst={WorstError:F2}) | {Desc}")]
+    static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger,
+        int gen,
+        string desc,
+        double bestError,
+        double avgError,
+        double worstError,
+        TimeSpan elapsed,
+        TimeSpan elapsedTotal);
 
     [LoggerMessage(LogLevel.Information, "Evolution succeeded at generation {Gen} with error {Error:F6}")]
     static partial void LogEvolutionSuccess(ILogger<EvolutionEngine> logger, int gen, double error);
