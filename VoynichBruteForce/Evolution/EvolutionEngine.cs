@@ -10,9 +10,11 @@ public partial class EvolutionEngine(
     ISourceTextRegistry sourceTextRegistry,
     IGenomeFactory genomeFactory,
     IOptions<Hyperparameters> hyperparameters,
+    IOptions<AppSettings> appSettings,
     ILogger<EvolutionEngine> logger)
 {
     private readonly Hyperparameters _hyperparameters = hyperparameters.Value;
+    private readonly AppSettings _appSettings = appSettings.Value;
 
     private TimeSpan? _elapsedTotal;
 
@@ -28,7 +30,7 @@ public partial class EvolutionEngine(
 
         LogEvolutionStarted(logger, seed, _hyperparameters.PopulationSize, _hyperparameters.MaxGenerations, sourceTextRegistry.AvailableIds.Count);
 
-        // 1. Initialize Population (Gen 0)
+        // Initialize Population (Gen 0)
         var population = new List<Genome>();
 
         for (var i = 0; i < _hyperparameters.PopulationSize; i++)
@@ -39,14 +41,19 @@ public partial class EvolutionEngine(
 
         LogPopulationInitialized(logger, _hyperparameters.PopulationSize);
 
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = _appSettings.DegreeOfParallelism
+        };
+
+        // Evaluate fitness.
         for (var gen = 0; gen < _hyperparameters.MaxGenerations; gen++)
         {
             var rankedResults = new (Genome Genome, PipelineResult Result)[population.Count];
 
             var start = Stopwatch.GetTimestamp();
-
-            // 2. Evaluate Fitness
-            Parallel.For(0, population.Count, i =>
+            
+            Parallel.For(0, population.Count, options, i =>
             {
                 var genome = population[i];
                 // Resolve genome to pipeline at evaluation time
