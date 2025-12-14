@@ -117,93 +117,102 @@ public partial class EvolutionEngine(
             {
                 LogEvolutionSuccess(logger, gen, best.Result.TotalErrorScore);
 
-                return new EvolutionResult(best.Result, best.Genome, gen, _elapsedTotal.Value);
+                return new(best.Result, best.Genome, gen, _elapsedTotal.Value);
             }
 
-            // 3. Selection & Reproduction
-            var nextGen = new List<Genome>();
-
-            // Check for cataclysm trigger
-            if (generationsSinceLastImprovement >= _hyperparameters.StagnationThreshold)
-            {
-                LogCataclysmTriggered(logger, gen, generationsSinceLastImprovement);
-
-                // Keep only the absolute best genome (the "Noah's Ark" approach)
-                nextGen.Add(best.Genome);
-
-                // Fill the rest of the population with brand new random genomes
-                // (fresh genetic material to escape the local optimum)
-                while (nextGen.Count < _hyperparameters.PopulationSize)
-                {
-                    nextGen.Add(genomeFactory.CreateRandomGenome(modifierCount: 5));
-                }
-
-                // Reset stagnation counter
-                generationsSinceLastImprovement = 0;
-            }
-            else
-            {
-                // Standard evolution logic
-
-                // Elitism: Add top 10%
-                var eliteCount = _hyperparameters.PopulationSize / 10;
-
-                for (var i = 0; i < eliteCount; i++)
-                {
-                    nextGen.Add(rankedResults[i].Genome);
-                }
-
-                // Fill the rest with mutations of the top 50%
-                var survivorCount = _hyperparameters.PopulationSize / 2;
-
-                var survivors =
-                    new ReadOnlySpan<(Genome Genome, PipelineResult Result)>(rankedResults, 0, survivorCount);
-
-                var random = new Random(seed + gen); // Ensure randomness varies per gen
-
-                while (nextGen.Count < _hyperparameters.PopulationSize)
-                {
-                    // STEP A: Select two distinctive parents
-                    // (Using random selection from the top 50% is a simple, effective strategy)
-                    var parentA = random.NextItem(survivors)
-                        .Genome;
-
-                    var parentB = random.NextItem(survivors)
-                        .Genome;
-
-                    // Try to ensure we aren't breeding a parent with itself,
-                    // though in small pools it happens.
-                    if (survivors.Length > 1)
-                    {
-                        while (parentB == parentA)
-                        {
-                            parentB = random.NextItem(survivors)
-                                .Genome;
-                        }
-                    }
-
-                    // STEP B: Crossover
-                    // Create a child by mixing traits of A and B (both source text and modifiers)
-                    var child = genomeFactory.Crossover(parentA, parentB);
-
-                    // STEP C: Mutation (The "Spark" of novelty)
-                    // Crossover rearranges existing solutions. Mutation finds new ones.
-                    // We apply mutation probabilistically.
-                    if (random.NextDouble() < _hyperparameters.MutationRate)
-                    {
-                        child = genomeFactory.Mutate(child);
-                    }
-
-                    nextGen.Add(child);
-                }
-            }
-
-            population = nextGen;
+            population = PerformSelectionAndReproduction(seed, ref generationsSinceLastImprovement, gen, best, rankedResults);
         }
 
         LogEvolutionCompleted(logger, _hyperparameters.MaxGenerations);
 
         return null;
+    }
+
+    private List<Genome> PerformSelectionAndReproduction(int seed,
+        ref int generationsSinceLastImprovement,
+        int gen,
+        (Genome Genome, PipelineResult Result) best,
+        (Genome Genome, PipelineResult Result)[] rankedResults)
+    {
+        // 3. Selection & Reproduction
+        var nextGen = new List<Genome>();
+
+        // Check for cataclysm trigger
+        if (generationsSinceLastImprovement >= _hyperparameters.StagnationThreshold)
+        {
+            LogCataclysmTriggered(logger, gen, generationsSinceLastImprovement);
+
+            // Keep only the absolute best genome (the "Noah's Ark" approach)
+            nextGen.Add(best.Genome);
+
+            // Fill the rest of the population with brand new random genomes
+            // (fresh genetic material to escape the local optimum)
+            while (nextGen.Count < _hyperparameters.PopulationSize)
+            {
+                nextGen.Add(genomeFactory.CreateRandomGenome(modifierCount: 5));
+            }
+
+            // Reset stagnation counter
+            generationsSinceLastImprovement = 0;
+        }
+        else
+        {
+            // Standard evolution logic
+
+            // Elitism: Add top 10%
+            var eliteCount = _hyperparameters.PopulationSize / 10;
+
+            for (var i = 0; i < eliteCount; i++)
+            {
+                nextGen.Add(rankedResults[i].Genome);
+            }
+
+            // Fill the rest with mutations of the top 50%
+            var survivorCount = _hyperparameters.PopulationSize / 2;
+
+            var survivors =
+                new ReadOnlySpan<(Genome Genome, PipelineResult Result)>(rankedResults, 0, survivorCount);
+
+            var random = new Random(seed + gen); // Ensure randomness varies per gen
+
+            while (nextGen.Count < _hyperparameters.PopulationSize)
+            {
+                // STEP A: Select two distinctive parents
+                // (Using random selection from the top 50% is a simple, effective strategy)
+                var parentA = random.NextItem(survivors)
+                    .Genome;
+
+                var parentB = random.NextItem(survivors)
+                    .Genome;
+
+                // Try to ensure we aren't breeding a parent with itself,
+                // though in small pools it happens.
+                if (survivors.Length > 1)
+                {
+                    while (parentB == parentA)
+                    {
+                        parentB = random.NextItem(survivors)
+                            .Genome;
+                    }
+                }
+
+                // STEP B: Crossover
+                // Create a child by mixing traits of A and B (both source text and modifiers)
+                var child = genomeFactory.Crossover(parentA, parentB);
+
+                // STEP C: Mutation (The "Spark" of novelty)
+                // Crossover rearranges existing solutions. Mutation finds new ones.
+                // We apply mutation probabilistically.
+                if (random.NextDouble() < _hyperparameters.MutationRate)
+                {
+                    child = genomeFactory.Mutate(child);
+                }
+
+                nextGen.Add(child);
+            }
+        }
+
+        return nextGen;
     }
 
     [LoggerMessage(LogLevel.Information,
