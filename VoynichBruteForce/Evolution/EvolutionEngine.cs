@@ -9,6 +9,7 @@ public partial class EvolutionEngine(
     PipelineRunner runner,
     ISourceTextRegistry sourceTextRegistry,
     IGenomeFactory genomeFactory,
+    RandomFactory randomFactory,
     IOptions<Hyperparameters> hyperparameters,
     IOptions<AppSettings> appSettings,
     ILogger<EvolutionEngine> logger)
@@ -120,7 +121,7 @@ public partial class EvolutionEngine(
                 return new(best.Result, best.Genome, gen, _elapsedTotal.Value);
             }
 
-            population = PerformSelectionAndReproduction(seed, ref generationsSinceLastImprovement, gen, best, rankedResults);
+            population = PerformSelectionAndReproduction(ref generationsSinceLastImprovement, gen, best, rankedResults);
         }
 
         LogEvolutionCompleted(logger, _hyperparameters.MaxGenerations);
@@ -128,8 +129,7 @@ public partial class EvolutionEngine(
         return null;
     }
 
-    private List<Genome> PerformSelectionAndReproduction(int seed,
-        ref int generationsSinceLastImprovement,
+    private List<Genome> PerformSelectionAndReproduction(ref int generationsSinceLastImprovement,
         int gen,
         (Genome Genome, PipelineResult Result) best,
         (Genome Genome, PipelineResult Result)[] rankedResults)
@@ -173,8 +173,12 @@ public partial class EvolutionEngine(
             var survivors =
                 new ReadOnlySpan<(Genome Genome, PipelineResult Result)>(rankedResults, 0, survivorCount);
 
-            var random = new Random(seed + gen); // Ensure randomness varies per gen
-
+            // TODO: we previously did this to 'ensure randomness varies per gen'.
+            // But was this actually meaningful? I'm not sure.
+            // Trying without for now to reduce allocations.
+            // var random = new Random(seed + gen);
+            var random = randomFactory.GetRandom();
+            
             while (nextGen.Count < _hyperparameters.PopulationSize)
             {
                 // STEP A: Select two distinctive parents
