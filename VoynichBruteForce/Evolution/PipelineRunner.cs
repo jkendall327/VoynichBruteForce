@@ -16,7 +16,7 @@ public class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyperparame
         var spanModifiers = modifiers
             .OfType<ISpanTextModifier>()
             .ToList();
-        
+
         var context = new ProcessingContext(sourceText, sourceText.Length * 4);
 
         try
@@ -25,7 +25,7 @@ public class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyperparame
             {
                 modifier.Modify(ref context);
             }
-            
+
             var resultLength = context.CurrentLength;
 
             if (resultLength < 100)

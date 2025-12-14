@@ -272,7 +272,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     private SpanWordFrequencyMap ComputeWordFrequencies()
     {
         // Estimate unique words as sqrt of total words (empirical heuristic)
-        var estimatedUnique = Math.Max(16, (int) Math.Sqrt(_wordCount) * 2);
+        var estimatedUnique = Math.Max(16, (int)Math.Sqrt(_wordCount) * 2);
         var map = new SpanWordFrequencyMap(TextMemory, estimatedUnique);
 
         var ranges = _wordRanges.AsSpan(0, _wordCount);
@@ -347,13 +347,13 @@ public sealed class PrecomputedTextAnalysis : IDisposable
             _textBuffer = null;
         }
 
-        if (_cleanedBuffer is {Length: > 0})
+        if (_cleanedBuffer is { Length: > 0 })
         {
             ArrayPool<char>.Shared.Return(_cleanedBuffer);
             _cleanedBuffer = null;
         }
 
-        if (_wordRanges is {Length: > 0})
+        if (_wordRanges is { Length: > 0 })
         {
             ArrayPool<Range>.Shared.Return(_wordRanges);
             _wordRanges = null;
