@@ -41,16 +41,26 @@ public partial class EvolutionEngine(
             _hyperparameters.MaxGenerations,
             sourceTextRegistry.AvailableIds.Count);
 
-        // Initialize Population (Gen 0)
-        var population = new List<Genome>();
+        var popSize = _hyperparameters.PopulationSize;
 
-        for (var i = 0; i < _hyperparameters.PopulationSize; i++)
+        // Pre-allocate double buffers for zero-allocation generation swapping
+        var populationBufferA = new Genome[popSize];
+        var populationBufferB = new Genome[popSize];
+
+        // Pre-allocate ranked results array - reused every generation
+        var rankedResults = new (Genome Genome, PipelineResult Result)[popSize];
+
+        // Initialize Generation 0 into Buffer A
+        for (var i = 0; i < popSize; i++)
         {
-            var genome = genomeFactory.CreateRandomGenome(modifierCount: 5);
-            population.Add(genome);
+            populationBufferA[i] = genomeFactory.CreateRandomGenome(modifierCount: 5);
         }
 
-        LogPopulationInitialized(logger, _hyperparameters.PopulationSize);
+        // Pointers to current and next generation buffers
+        var currentGen = populationBufferA;
+        var nextGen = populationBufferB;
+
+        LogPopulationInitialized(logger, popSize);
 
         // ReSharper disable once HeapView.ObjectAllocation.Evident
         // Only allocated once outside of the main evolutionary loop.
@@ -66,18 +76,17 @@ public partial class EvolutionEngine(
         // Evaluate fitness.
         for (var gen = 0; gen < _hyperparameters.MaxGenerations; gen++)
         {
-            var rankedResults = new (Genome Genome, PipelineResult Result)[population.Count];
-
             var start = Stopwatch.GetTimestamp();
 
-            var currentPopulation = population;
+            // Capture reference for the parallel loop
+            var genPopulation = currentGen;
 
             Parallel.For(0,
-                population.Count,
+                popSize,
                 options,
                 i =>
                 {
-                    var genome = currentPopulation[i];
+                    var genome = genPopulation[i];
 
                     // Resolve genome to pipeline at evaluation time
                     var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
@@ -87,14 +96,7 @@ public partial class EvolutionEngine(
 
             var elapsed = Stopwatch.GetElapsedTime(start);
 
-            if (_elapsedTotal is null)
-            {
-                _elapsedTotal = elapsed;
-            }
-            else
-            {
-                _elapsedTotal += elapsed;
-            }
+            _elapsedTotal = (_elapsedTotal ?? TimeSpan.Zero) + elapsed;
 
             // Order by lowest error (best fit)
             Array.Sort(rankedResults, static (a, b) => a.Result.TotalErrorScore.CompareTo(b.Result.TotalErrorScore));
@@ -132,7 +134,10 @@ public partial class EvolutionEngine(
                 return new(best.Result, best.Genome, gen, _elapsedTotal.Value);
             }
 
-            population = PerformSelectionAndReproduction(ref generationsSinceLastImprovement, gen, best, rankedResults);
+            FillNextGeneration(ref generationsSinceLastImprovement, gen, best, rankedResults, nextGen);
+
+            // Swap buffers - next generation becomes current
+            (currentGen, nextGen) = (nextGen, currentGen);
         }
 
         LogEvolutionCompleted(logger, _hyperparameters.MaxGenerations);
@@ -140,13 +145,15 @@ public partial class EvolutionEngine(
         return null;
     }
 
-    private List<Genome> PerformSelectionAndReproduction(ref int generationsSinceLastImprovement,
+    private void FillNextGeneration(
+        ref int generationsSinceLastImprovement,
         int gen,
         (Genome Genome, PipelineResult Result) best,
-        (Genome Genome, PipelineResult Result)[] rankedResults)
+        (Genome Genome, PipelineResult Result)[] rankedResults,
+        Genome[] targetPopulation)
     {
-        // 3. Selection & Reproduction
-        var nextGen = new List<Genome>();
+        var popSize = targetPopulation.Length;
+        var writeIndex = 0;
 
         // Check for cataclysm trigger
         if (generationsSinceLastImprovement >= _hyperparameters.StagnationThreshold)
@@ -154,80 +161,63 @@ public partial class EvolutionEngine(
             LogCataclysmTriggered(logger, gen, generationsSinceLastImprovement);
 
             // Keep only the absolute best genome (the "Noah's Ark" approach)
-            nextGen.Add(best.Genome);
+            targetPopulation[writeIndex++] = best.Genome;
 
             // Fill the rest of the population with brand new random genomes
             // (fresh genetic material to escape the local optimum)
-            while (nextGen.Count < _hyperparameters.PopulationSize)
+            while (writeIndex < popSize)
             {
-                nextGen.Add(genomeFactory.CreateRandomGenome(modifierCount: 5));
+                targetPopulation[writeIndex++] = genomeFactory.CreateRandomGenome(modifierCount: 5);
             }
 
             // Reset stagnation counter
             generationsSinceLastImprovement = 0;
+            return;
         }
-        else
+
+        // Standard evolution logic
+
+        // Elitism: Keep top 10%
+        var eliteCount = popSize / 10;
+
+        for (var i = 0; i < eliteCount && writeIndex < popSize; i++)
         {
-            // Standard evolution logic
-
-            // Elitism: Add top 10%
-            var eliteCount = _hyperparameters.PopulationSize / 10;
-
-            for (var i = 0; i < eliteCount; i++)
-            {
-                nextGen.Add(rankedResults[i].Genome);
-            }
-
-            // Fill the rest with mutations of the top 50%
-            var survivorCount = _hyperparameters.PopulationSize / 2;
-
-            var survivors =
-                new ReadOnlySpan<(Genome Genome, PipelineResult Result)>(rankedResults, 0, survivorCount);
-
-            // TODO: we previously did this to 'ensure randomness varies per gen'.
-            // But was this actually meaningful? I'm not sure.
-            // Trying without for now to reduce allocations.
-            // var random = new Random(seed + gen);
-            var random = randomFactory.GetRandom();
-            
-            while (nextGen.Count < _hyperparameters.PopulationSize)
-            {
-                // STEP A: Select two distinctive parents
-                // (Using random selection from the top 50% is a simple, effective strategy)
-                var parentA = random.NextItem(survivors)
-                    .Genome;
-
-                var parentB = random.NextItem(survivors)
-                    .Genome;
-
-                // Try to ensure we aren't breeding a parent with itself,
-                // though in small pools it happens.
-                if (survivors.Length > 1)
-                {
-                    while (parentB == parentA)
-                    {
-                        parentB = random.NextItem(survivors)
-                            .Genome;
-                    }
-                }
-
-                // STEP B: Crossover
-                // Create a child by mixing traits of A and B (both source text and modifiers)
-                var child = genomeFactory.Crossover(parentA, parentB);
-
-                // STEP C: Mutation (The "Spark" of novelty)
-                // Crossover rearranges existing solutions. Mutation finds new ones.
-                // We apply mutation probabilistically.
-                if (random.NextDouble() < _hyperparameters.MutationRate)
-                {
-                    child = genomeFactory.Mutate(child);
-                }
-
-                nextGen.Add(child);
-            }
+            targetPopulation[writeIndex++] = rankedResults[i].Genome;
         }
 
-        return nextGen;
+        // Fill the rest with crossover/mutation of the top 50%
+        var survivorCount = popSize / 2;
+        var survivors = new ReadOnlySpan<(Genome Genome, PipelineResult Result)>(rankedResults, 0, survivorCount);
+        var random = randomFactory.GetRandom();
+
+        while (writeIndex < popSize)
+        {
+            // Select two distinct parents from top 50%
+            var parentA = random.NextItem(survivors).Genome;
+            var parentB = random.NextItem(survivors).Genome;
+
+            // Try to ensure we aren't breeding a parent with itself
+            if (survivors.Length > 1)
+            {
+                var attempts = 0;
+                while (parentB == parentA && attempts < 5)
+                {
+                    parentB = random.NextItem(survivors).Genome;
+                    attempts++;
+                }
+            }
+
+            // Crossover: Create a child by mixing traits of A and B
+            var child = genomeFactory.Crossover(parentA, parentB);
+
+            // Mutation: Apply probabilistically
+            if (random.NextDouble() < _hyperparameters.MutationRate)
+            {
+                child = genomeFactory.Mutate(child);
+            }
+
+            targetPopulation[writeIndex++] = child;
+        }
     }
 
     [LoggerMessage(LogLevel.Information,
