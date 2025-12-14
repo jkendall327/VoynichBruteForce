@@ -21,11 +21,17 @@ public partial class EvolutionEngine(
 
     public EvolutionResult? Evolve(int seed)
     {
+        // ReSharper disable once HeapView.ObjectAllocation.Evident
+        // Only allocates once outside of the evolutionary loop.
         using var evolutionScope = logger.BeginScope(new Dictionary<string, object>
         {
+            // ReSharper disable once HeapView.BoxingAllocation
             ["Seed"] = seed,
+            // ReSharper disable once HeapView.BoxingAllocation
             ["PopulationSize"] = _hyperparameters.PopulationSize,
+            // ReSharper disable once HeapView.BoxingAllocation
             ["MaxGenerations"] = _hyperparameters.MaxGenerations,
+            // ReSharper disable once HeapView.BoxingAllocation
             ["MutationRate"] = _hyperparameters.MutationRate
         });
 
@@ -46,6 +52,8 @@ public partial class EvolutionEngine(
 
         LogPopulationInitialized(logger, _hyperparameters.PopulationSize);
 
+        // ReSharper disable once HeapView.ObjectAllocation.Evident
+        // Only allocated once outside of the main evolutionary loop.
         var options = new ParallelOptions
         {
             MaxDegreeOfParallelism = _appSettings.DegreeOfParallelism
@@ -119,6 +127,8 @@ public partial class EvolutionEngine(
             {
                 LogEvolutionSuccess(logger, gen, best.Result.TotalErrorScore);
 
+                // ReSharper disable once HeapView.ObjectAllocation.Evident
+                // Will only allocate once when we have broken the hot allocation loop.
                 return new(best.Result, best.Genome, gen, _elapsedTotal.Value);
             }
 
