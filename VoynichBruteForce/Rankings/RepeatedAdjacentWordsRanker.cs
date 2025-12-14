@@ -25,9 +25,9 @@ public class RepeatedAdjacentWordsRanker(IOptions<VoynichProfile> profile) : IRu
 
         var words = analysis.Words;
         var text = analysis.TextSpan;
-        int repetitionCount = 0;
+        var repetitionCount = 0;
 
-        for (int i = 1; i < wordCount; i++)
+        for (var i = 1; i < wordCount; i++)
         {
             var prev = words.GetWord(text, i - 1);
             var curr = words.GetWord(text, i);
@@ -38,12 +38,12 @@ public class RepeatedAdjacentWordsRanker(IOptions<VoynichProfile> profile) : IRu
             }
         }
 
-        double repetitionRatio = (double)repetitionCount / wordCount;
-        double rawDelta = Math.Abs(repetitionRatio - _profile.TargetRepeatedAdjacentWordsRatio);
+        var repetitionRatio = (double)repetitionCount / wordCount;
+        var rawDelta = Math.Abs(repetitionRatio - _profile.TargetRepeatedAdjacentWordsRatio);
 
         // Normalize: 0.05 (5% deviation) is one error unit
-        double tolerance = 0.05;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+        var tolerance = 0.05;
+        var normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
         return new(Name, repetitionRatio, _profile.TargetRepeatedAdjacentWordsRatio, normalizedError, Weight);
     }

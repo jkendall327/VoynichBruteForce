@@ -47,8 +47,8 @@ public partial class EvolutionEngine(
         };
 
         // Tracking variables for cataclysm feature
-        double globalBestError = double.MaxValue;
-        int generationsSinceLastImprovement = 0;
+        var globalBestError = double.MaxValue;
+        var generationsSinceLastImprovement = 0;
 
         // Evaluate fitness.
         for (var gen = 0; gen < _hyperparameters.MaxGenerations; gen++)

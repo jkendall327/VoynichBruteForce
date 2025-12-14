@@ -30,16 +30,16 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
 
         var words = analysis.Words;
         var text = analysis.TextSpan;
-        int similarPairCount = 0;
-        int totalPairs = 0;
+        var similarPairCount = 0;
+        var totalPairs = 0;
 
-        for (int i = 1; i < wordCount; i++)
+        for (var i = 1; i < wordCount; i++)
         {
             var prev = words.GetWord(text, i - 1);
             var curr = words.GetWord(text, i);
 
-            int distance = LevenshteinDistance(prev, curr);
-            int maxLength = Math.Max(prev.Length, curr.Length);
+            var distance = LevenshteinDistance(prev, curr);
+            var maxLength = Math.Max(prev.Length, curr.Length);
 
             // Similar words have distance <= 2 (one or two character changes)
             if (maxLength > 0 && distance <= 2)
@@ -50,12 +50,12 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
             totalPairs++;
         }
 
-        double similarityRatio = (double)similarPairCount / totalPairs;
-        double rawDelta = Math.Abs(similarityRatio - _profile.TargetNeighboringWordSimilarity);
+        var similarityRatio = (double)similarPairCount / totalPairs;
+        var rawDelta = Math.Abs(similarityRatio - _profile.TargetNeighboringWordSimilarity);
 
         // Normalize: 0.05 (5% deviation) is one error unit
-        double tolerance = 0.05;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+        var tolerance = 0.05;
+        var normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
         return new(Name, similarityRatio, _profile.TargetNeighboringWordSimilarity, normalizedError, Weight);
     }
@@ -72,40 +72,40 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
         if (target.IsEmpty)
             return source.Length;
 
-        int n = source.Length;
-        int m = target.Length;
+        var n = source.Length;
+        var m = target.Length;
 
         // Use two-row optimization: only need current and previous row
-        int rowSize = m + 1;
+        var rowSize = m + 1;
 
         // Use stackalloc for reasonable sizes, ArrayPool otherwise
         int[]? pooledPrev = null;
         int[]? pooledCurr = null;
 
-        Span<int> prevRow = rowSize <= MaxStackallocLength
+        var prevRow = rowSize <= MaxStackallocLength
             ? stackalloc int[rowSize]
             : (pooledPrev = ArrayPool<int>.Shared.Rent(rowSize)).AsSpan(0, rowSize);
 
-        Span<int> currRow = rowSize <= MaxStackallocLength
+        var currRow = rowSize <= MaxStackallocLength
             ? stackalloc int[rowSize]
             : (pooledCurr = ArrayPool<int>.Shared.Rent(rowSize)).AsSpan(0, rowSize);
 
         try
         {
             // Initialize first row
-            for (int j = 0; j <= m; j++)
+            for (var j = 0; j <= m; j++)
                 prevRow[j] = j;
 
             // Calculate distances row by row
-            for (int i = 1; i <= n; i++)
+            for (var i = 1; i <= n; i++)
             {
                 currRow[0] = i;
-                char sourceChar = char.ToLowerInvariant(source[i - 1]);
+                var sourceChar = char.ToLowerInvariant(source[i - 1]);
 
-                for (int j = 1; j <= m; j++)
+                for (var j = 1; j <= m; j++)
                 {
-                    char targetChar = char.ToLowerInvariant(target[j - 1]);
-                    int cost = sourceChar == targetChar ? 0 : 1;
+                    var targetChar = char.ToLowerInvariant(target[j - 1]);
+                    var cost = sourceChar == targetChar ? 0 : 1;
 
                     currRow[j] = Math.Min(
                         Math.Min(

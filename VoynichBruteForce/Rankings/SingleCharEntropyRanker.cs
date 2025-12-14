@@ -17,13 +17,13 @@ public class SingleCharEntropyRanker(IOptions<VoynichProfile> profile) : IRuleAd
 
     public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        double actualH1 = ComputeH1(analysis.CharFrequencies);
+        var actualH1 = ComputeH1(analysis.CharFrequencies);
 
-        double rawDelta = Math.Abs(actualH1 - _profile.TargetH1Entropy);
+        var rawDelta = Math.Abs(actualH1 - _profile.TargetH1Entropy);
 
         // Normalize: 0.5 bits deviation is one error unit
-        double tolerance = 0.5;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+        var tolerance = 0.5;
+        var normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
         return new(Name, actualH1, _profile.TargetH1Entropy, normalizedError, Weight);
     }
@@ -33,7 +33,7 @@ public class SingleCharEntropyRanker(IOptions<VoynichProfile> profile) : IRuleAd
         if (charFrequencies.Count == 0)
             return 0;
 
-        int totalChars = 0;
+        var totalChars = 0;
         foreach (var count in charFrequencies.Values)
             totalChars += count;
 
@@ -44,7 +44,7 @@ public class SingleCharEntropyRanker(IOptions<VoynichProfile> profile) : IRuleAd
         double entropy = 0;
         foreach (var count in charFrequencies.Values)
         {
-            double probability = (double)count / totalChars;
+            var probability = (double)count / totalChars;
             entropy -= probability * Math.Log2(probability);
         }
 

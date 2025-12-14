@@ -24,14 +24,14 @@ public class VocabularySizeRanker(IOptions<VoynichProfile> profile) : IRuleAdher
         }
 
         // Unique words count from the hash-based frequency map
-        int uniqueWordCount = analysis.WordFrequencyMap.UniqueWordCount;
-        double typeTokenRatio = (double)uniqueWordCount / wordCount;
+        var uniqueWordCount = analysis.WordFrequencyMap.UniqueWordCount;
+        var typeTokenRatio = (double)uniqueWordCount / wordCount;
 
-        double rawDelta = Math.Abs(typeTokenRatio - _profile.TargetTypeTokenRatio);
+        var rawDelta = Math.Abs(typeTokenRatio - _profile.TargetTypeTokenRatio);
 
         // Normalize: 0.1 (10% deviation) is one error unit
-        double tolerance = 0.1;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+        var tolerance = 0.1;
+        var normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
         return new(Name, typeTokenRatio, _profile.TargetTypeTokenRatio, normalizedError, Weight);
     }

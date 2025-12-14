@@ -39,15 +39,15 @@ public class WordLengthFrequencyRanker(IOptions<VoynichProfile> profile) : IRule
             var count = freqMap.GetLengthsAndFrequencies(lengths, frequencies);
 
             // Calculate Pearson correlation between word length and frequency
-            double correlation = CalculatePearsonCorrelation(
+            var correlation = CalculatePearsonCorrelation(
                 lengths.AsSpan(0, count),
                 frequencies.AsSpan(0, count));
 
-            double rawDelta = Math.Abs(correlation - _profile.TargetWordLengthFrequencyCorrelation);
+            var rawDelta = Math.Abs(correlation - _profile.TargetWordLengthFrequencyCorrelation);
 
             // Normalize: 0.2 deviation in correlation is one error unit
-            double tolerance = 0.2;
-            double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+            var tolerance = 0.2;
+            var normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
             return new(Name, correlation, _profile.TargetWordLengthFrequencyCorrelation, normalizedError, Weight);
         }
@@ -60,12 +60,12 @@ public class WordLengthFrequencyRanker(IOptions<VoynichProfile> profile) : IRule
 
     private static double CalculatePearsonCorrelation(ReadOnlySpan<int> lengths, ReadOnlySpan<int> frequencies)
     {
-        int n = lengths.Length;
+        var n = lengths.Length;
         if (n < 2) return 0;
 
         double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
 
-        for (int i = 0; i < n; i++)
+        for (var i = 0; i < n; i++)
         {
             double x = lengths[i];
             double y = frequencies[i];
@@ -77,8 +77,8 @@ public class WordLengthFrequencyRanker(IOptions<VoynichProfile> profile) : IRule
             sumY2 += y * y;
         }
 
-        double numerator = n * sumXY - sumX * sumY;
-        double denominator = Math.Sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+        var numerator = n * sumXY - sumX * sumY;
+        var denominator = Math.Sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
 
         if (Math.Abs(denominator) < 0.0001)
             return 0;

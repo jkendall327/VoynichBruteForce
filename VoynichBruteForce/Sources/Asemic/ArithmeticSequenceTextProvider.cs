@@ -50,17 +50,17 @@ public class ArithmeticSequenceTextProvider : ITextProvider
     public string GetText()
     {
         var words = new List<string>(_wordCount);
-        int position = _start;
+        var position = _start;
 
-        for (int i = 0; i < _wordCount; i++)
+        for (var i = 0; i < _wordCount; i++)
         {
             var wordParts = new List<string>(_lettersPerWord);
 
-            for (int j = 0; j < _lettersPerWord; j++)
+            for (var j = 0; j < _lettersPerWord; j++)
             {
                 // Map the current position in the sequence to an alphabet index
                 // Use modulo to wrap around the alphabet
-                int alphabetIndex = position % _alphabet.Length;
+                var alphabetIndex = position % _alphabet.Length;
                 wordParts.Add(_alphabet[alphabetIndex]);
 
                 // Advance to next position in arithmetic sequence

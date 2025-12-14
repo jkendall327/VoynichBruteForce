@@ -47,12 +47,12 @@ public class RandomTextProvider : ITextProvider
     {
         var words = new List<string>(_wordCount);
 
-        for (int i = 0; i < _wordCount; i++)
+        for (var i = 0; i < _wordCount; i++)
         {
-            int wordLength = _random.Next(_minWordLength, _maxWordLength + 1);
+            var wordLength = _random.Next(_minWordLength, _maxWordLength + 1);
             var wordChars = new char[wordLength];
 
-            for (int j = 0; j < wordLength; j++)
+            for (var j = 0; j < wordLength; j++)
             {
                 wordChars[j] = _random.NextItem(_alphabet);
             }

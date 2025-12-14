@@ -50,8 +50,8 @@ public sealed class SpanWordFrequencyMap : IDisposable
     {
         get
         {
-            int total = 0;
-            for (int i = 0; i < _count; i++)
+            var total = 0;
+            for (var i = 0; i < _count; i++)
             {
                 total += _entries[i].Frequency;
             }
@@ -115,7 +115,7 @@ public sealed class SpanWordFrequencyMap : IDisposable
     public (int[] Frequencies, int Count) GetSortedFrequencies()
     {
         var freqs = ArrayPool<int>.Shared.Rent(_count);
-        for (int i = 0; i < _count; i++)
+        for (var i = 0; i < _count; i++)
         {
             freqs[i] = _entries[i].Frequency;
         }
@@ -131,7 +131,7 @@ public sealed class SpanWordFrequencyMap : IDisposable
     public int GetLengthsAndFrequencies(Span<int> lengths, Span<int> frequencies)
     {
         var count = Math.Min(_count, Math.Min(lengths.Length, frequencies.Length));
-        for (int i = 0; i < count; i++)
+        for (var i = 0; i < count; i++)
         {
             var range = _entries[i].WordRange;
             lengths[i] = range.End.Value - range.Start.Value;

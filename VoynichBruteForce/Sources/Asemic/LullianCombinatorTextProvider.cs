@@ -43,19 +43,19 @@ public class LullianCombinatorTextProvider : ITextProvider
     public string GetText()
     {
         var words = new List<string>(_wordCount);
-        int totalCombinations = _wheel1.Length * _wheel2.Length * _wheel3.Length;
+        var totalCombinations = _wheel1.Length * _wheel2.Length * _wheel3.Length;
 
         // Generate words by systematically rotating through all combinations
         // This simulates rotating the wheels one position at a time
-        for (int i = 0; i < _wordCount; i++)
+        for (var i = 0; i < _wordCount; i++)
         {
             // Use modulo arithmetic to cycle through combinations
             // This ensures we systematically cover all possibilities
-            int index1 = (i / (_wheel2.Length * _wheel3.Length)) % _wheel1.Length;
-            int index2 = (i / _wheel3.Length) % _wheel2.Length;
-            int index3 = i % _wheel3.Length;
+            var index1 = (i / (_wheel2.Length * _wheel3.Length)) % _wheel1.Length;
+            var index2 = (i / _wheel3.Length) % _wheel2.Length;
+            var index3 = i % _wheel3.Length;
 
-            string word = _wheel1[index1] + _wheel2[index2] + _wheel3[index3];
+            var word = _wheel1[index1] + _wheel2[index2] + _wheel3[index3];
             words.Add(word);
         }
 

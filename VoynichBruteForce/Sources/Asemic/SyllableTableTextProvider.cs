@@ -73,16 +73,16 @@ public class SyllableTableTextProvider : ITextProvider
     public string GetText()
     {
         var words = new List<string>(_wordCount);
-        int rows = _syllableTable.GetLength(0);
-        int cols = _syllableTable.GetLength(1);
-        int totalSyllables = rows * cols;
-        int currentIndex = 0;
+        var rows = _syllableTable.GetLength(0);
+        var cols = _syllableTable.GetLength(1);
+        var totalSyllables = rows * cols;
+        var currentIndex = 0;
 
-        for (int i = 0; i < _wordCount; i++)
+        for (var i = 0; i < _wordCount; i++)
         {
             var syllables = new List<string>(_syllablesPerWord);
 
-            for (int j = 0; j < _syllablesPerWord; j++)
+            for (var j = 0; j < _syllablesPerWord; j++)
             {
                 var (row, col) = GetCoordinates(currentIndex % totalSyllables, rows, cols);
                 syllables.Add(_syllableTable[row, col]);
@@ -117,13 +117,13 @@ public class SyllableTableTextProvider : ITextProvider
     private (int row, int col) GetDiagonalCoordinates(int index, int rows, int cols)
     {
         // Traverse diagonals from top-left to bottom-right
-        int diagonal = 0;
-        int position = index;
+        var diagonal = 0;
+        var position = index;
 
         // Find which diagonal we're on
         while (position >= 0)
         {
-            int diagonalLength = Math.Min(diagonal + 1, Math.Min(rows, cols));
+            var diagonalLength = Math.Min(diagonal + 1, Math.Min(rows, cols));
             if (diagonal >= rows)
                 diagonalLength = Math.Min(cols - (diagonal - rows + 1), rows);
             if (diagonal >= cols)
@@ -137,8 +137,8 @@ public class SyllableTableTextProvider : ITextProvider
         }
 
         // Calculate position within the diagonal
-        int row = diagonal < cols ? position : position + (diagonal - cols + 1);
-        int col = diagonal < cols ? diagonal - position : cols - 1 - position;
+        var row = diagonal < cols ? position : position + (diagonal - cols + 1);
+        var col = diagonal < cols ? diagonal - position : cols - 1 - position;
 
         return (Math.Min(row, rows - 1), Math.Min(col, cols - 1));
     }
@@ -146,8 +146,8 @@ public class SyllableTableTextProvider : ITextProvider
     private (int row, int col) GetBoustrophedonCoordinates(int index, int rows, int cols)
     {
         // Boustrophedon: "as the ox plows" - alternating direction each row
-        int row = index / cols;
-        int col = index % cols;
+        var row = index / cols;
+        var col = index % cols;
 
         // Reverse column order on odd rows
         if (row % 2 == 1)

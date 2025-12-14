@@ -36,7 +36,7 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
 
         var bigramCounts = bigrams.BigramCounts;
         var charCounts = bigrams.PrevCharCounts;
-        int totalChars = bigrams.TotalBigrams;
+        var totalChars = bigrams.TotalBigrams;
 
         // Calculate conditional entropy: H2 = Σ P(c1) * H(c2|c1)
         // H(c2|c1) = -Σ P(c2|c1) * log₂(P(c2|c1))
@@ -44,14 +44,14 @@ public class ConditionalEntropyRanker(IOptions<VoynichProfile> profile) : IRuleA
 
         foreach (var prevChar in bigramCounts.Keys)
         {
-            double probPrevChar = (double)charCounts[prevChar] / totalChars;
-            int totalFollowing = charCounts[prevChar];
+            var probPrevChar = (double)charCounts[prevChar] / totalChars;
+            var totalFollowing = charCounts[prevChar];
 
             double conditionalEntropy = 0;
             foreach (var currChar in bigramCounts[prevChar].Keys)
             {
-                int count = bigramCounts[prevChar][currChar];
-                double conditionalProb = (double)count / totalFollowing;
+                var count = bigramCounts[prevChar][currChar];
+                var conditionalProb = (double)count / totalFollowing;
                 conditionalEntropy -= conditionalProb * Math.Log2(conditionalProb);
             }
 
