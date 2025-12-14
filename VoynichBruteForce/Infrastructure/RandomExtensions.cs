@@ -26,6 +26,11 @@ public static class RandomExtensions
     {
         return list[random.Next(list.Count)];
     }
+    
+    public static T NextItem<T>(this Random random, ReadOnlySpan<T> list)
+    {
+        return list[random.Next(list.Length)];
+    }
 
     /// <summary>
     /// Returns a random boolean value.

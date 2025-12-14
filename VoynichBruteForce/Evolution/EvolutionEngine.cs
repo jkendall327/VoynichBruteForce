@@ -28,7 +28,11 @@ public partial class EvolutionEngine(
             ["MutationRate"] = _hyperparameters.MutationRate
         });
 
-        LogEvolutionStarted(logger, seed, _hyperparameters.PopulationSize, _hyperparameters.MaxGenerations, sourceTextRegistry.AvailableIds.Count);
+        LogEvolutionStarted(logger,
+            seed,
+            _hyperparameters.PopulationSize,
+            _hyperparameters.MaxGenerations,
+            sourceTextRegistry.AvailableIds.Count);
 
         // Initialize Population (Gen 0)
         var population = new List<Genome>();
@@ -57,15 +61,19 @@ public partial class EvolutionEngine(
 
             var start = Stopwatch.GetTimestamp();
 
-            Parallel.For(0, population.Count, options, i =>
-            {
-                var genome = population[i];
-                // Resolve genome to pipeline at evaluation time
-                var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
-                var pipeline = new Pipeline(sourceText, genome.Modifiers);
-                var result = runner.Run(pipeline, genome.SourceTextId);
-                rankedResults[i] = (genome, result);
-            });
+            Parallel.For(0,
+                population.Count,
+                options,
+                i =>
+                {
+                    var genome = population[i];
+
+                    // Resolve genome to pipeline at evaluation time
+                    var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
+                    var pipeline = new Pipeline(sourceText, genome.Modifiers);
+                    var result = runner.Run(pipeline, genome.SourceTextId);
+                    rankedResults[i] = (genome, result);
+                });
 
             var elapsed = Stopwatch.GetElapsedTime(start);
 
@@ -79,16 +87,14 @@ public partial class EvolutionEngine(
             }
 
             // Order by lowest error (best fit)
-            var sorted = rankedResults
-                .OrderBy(x => x.Result.TotalErrorScore)
-                .ToList();
+            Array.Sort(rankedResults, static (a, b) => a.Result.TotalErrorScore.CompareTo(b.Result.TotalErrorScore));
 
-            var best = sorted.First();
-            var worst = sorted.Last();
-            var avgError = sorted.Average(x => x.Result.TotalErrorScore);
+            var best = rankedResults[0];
+            var worst = rankedResults[^1];
 
             // Check for improvement (using a small epsilon for float comparison)
             var currentBestError = best.Result.TotalErrorScore;
+
             if (currentBestError < globalBestError - 0.00001)
             {
                 globalBestError = currentBestError;
@@ -99,8 +105,13 @@ public partial class EvolutionEngine(
                 generationsSinceLastImprovement++;
             }
 
-            LogGenerationInfo(logger, gen, best.Result.PipelineDescription,
-                best.Result.TotalErrorScore, avgError, worst.Result.TotalErrorScore, elapsed, _elapsedTotal.Value);
+            LogGenerationInfo(logger,
+                gen,
+                best.Result.PipelineDescription,
+                best.Result.TotalErrorScore,
+                worst.Result.TotalErrorScore,
+                elapsed,
+                _elapsedTotal.Value);
 
             if (best.Result.TotalErrorScore < 0.05)
             {
@@ -134,15 +145,19 @@ public partial class EvolutionEngine(
             {
                 // Standard evolution logic
 
-                // Elitism: Keep the top 10% unchanged
-                nextGen.AddRange(sorted
-                    .Take(_hyperparameters.PopulationSize / 10)
-                    .Select(x => x.Genome));
+                // Elitism: Add top 10%
+                var eliteCount = _hyperparameters.PopulationSize / 10;
+
+                for (var i = 0; i < eliteCount; i++)
+                {
+                    nextGen.Add(rankedResults[i].Genome);
+                }
 
                 // Fill the rest with mutations of the top 50%
-                var survivors = sorted
-                    .Take(_hyperparameters.PopulationSize / 2)
-                    .ToList();
+                var survivorCount = _hyperparameters.PopulationSize / 2;
+
+                var survivors =
+                    new ReadOnlySpan<(Genome Genome, PipelineResult Result)>(rankedResults, 0, survivorCount);
 
                 var random = new Random(seed + gen); // Ensure randomness varies per gen
 
@@ -150,16 +165,20 @@ public partial class EvolutionEngine(
                 {
                     // STEP A: Select two distinctive parents
                     // (Using random selection from the top 50% is a simple, effective strategy)
-                    var parentA = random.NextItem(survivors).Genome;
-                    var parentB = random.NextItem(survivors).Genome;
+                    var parentA = random.NextItem(survivors)
+                        .Genome;
+
+                    var parentB = random.NextItem(survivors)
+                        .Genome;
 
                     // Try to ensure we aren't breeding a parent with itself,
                     // though in small pools it happens.
-                    if (survivors.Count > 1)
+                    if (survivors.Length > 1)
                     {
                         while (parentB == parentA)
                         {
-                            parentB = random.NextItem(survivors).Genome;
+                            parentB = random.NextItem(survivors)
+                                .Genome;
                         }
                     }
 
@@ -187,18 +206,23 @@ public partial class EvolutionEngine(
         return null;
     }
 
-    [LoggerMessage(LogLevel.Information, "Starting evolution: Seed={Seed}, Population={PopulationSize}, MaxGen={MaxGenerations}, AvailableSourceTexts={SourceTextCount}")]
-    static partial void LogEvolutionStarted(ILogger<EvolutionEngine> logger, int seed, int populationSize, int maxGenerations, int sourceTextCount);
+    [LoggerMessage(LogLevel.Information,
+        "Starting evolution: Seed={Seed}, Population={PopulationSize}, MaxGen={MaxGenerations}, AvailableSourceTexts={SourceTextCount}")]
+    static partial void LogEvolutionStarted(ILogger<EvolutionEngine> logger,
+        int seed,
+        int populationSize,
+        int maxGenerations,
+        int sourceTextCount);
 
     [LoggerMessage(LogLevel.Information, "Population initialized with {Count} random genomes")]
     static partial void LogPopulationInitialized(ILogger<EvolutionEngine> logger, int count);
 
-    [LoggerMessage(LogLevel.Information, "Gen {gen} ({Elapsed}/{ElapsedTotal}): Best={BestError:F2} (Avg={AvgError:F2}, Worst={WorstError:F2}) | {Desc}")]
+    [LoggerMessage(LogLevel.Information,
+        "Gen {gen} ({Elapsed}/{ElapsedTotal}): Best={BestError:F2} (Worst={WorstError:F2}) | {Desc}")]
     static partial void LogGenerationInfo(ILogger<EvolutionEngine> logger,
         int gen,
         string desc,
         double bestError,
-        double avgError,
         double worstError,
         TimeSpan elapsed,
         TimeSpan elapsedTotal);
@@ -209,6 +233,7 @@ public partial class EvolutionEngine(
     [LoggerMessage(LogLevel.Information, "Evolution completed after {MaxGenerations} generations")]
     static partial void LogEvolutionCompleted(ILogger<EvolutionEngine> logger, int maxGenerations);
 
-    [LoggerMessage(LogLevel.Warning, "CATACLYSM TRIGGERED at Gen {Gen}! Stagnation for {Count} generations. Population wiped.")]
+    [LoggerMessage(LogLevel.Warning,
+        "CATACLYSM TRIGGERED at Gen {Gen}! Stagnation for {Count} generations. Population wiped.")]
     static partial void LogCataclysmTriggered(ILogger<EvolutionEngine> logger, int gen, int count);
 }
