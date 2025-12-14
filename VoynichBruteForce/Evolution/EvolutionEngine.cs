@@ -62,12 +62,14 @@ public partial class EvolutionEngine(
 
             var start = Stopwatch.GetTimestamp();
 
+            var currentPopulation = population;
+
             Parallel.For(0,
                 population.Count,
                 options,
                 i =>
                 {
-                    var genome = population[i];
+                    var genome = currentPopulation[i];
 
                     // Resolve genome to pipeline at evaluation time
                     var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
