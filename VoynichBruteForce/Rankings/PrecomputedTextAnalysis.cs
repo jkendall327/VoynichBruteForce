@@ -21,9 +21,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     private int _wordCount = -1; // -1 means not computed yet
 
     // Lazy-computed data
-    private Dictionary<char, int>? _charFrequencies;
     private SpanWordFrequencyMap? _wordFrequencies;
-    private BigramData? _bigrams;
 
     private bool _disposed;
 
@@ -38,6 +36,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         if (_textLength == 0)
         {
             _textBuffer = null;
+
             return;
         }
 
@@ -49,7 +48,9 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     /// <summary>
     /// Legacy constructor for backward compatibility with string input.
     /// </summary>
-    public PrecomputedTextAnalysis(string text) : this(text.AsSpan()) { }
+    public PrecomputedTextAnalysis(string text) : this(text.AsSpan())
+    {
+    }
 
     /// <summary>
     /// Read-only view of the original text.
@@ -74,6 +75,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         get
         {
             EnsureWordsParsed();
+
             return _wordCount;
         }
     }
@@ -86,6 +88,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         get
         {
             EnsureWordsParsed();
+
             return new WordBoundaries(_wordRanges!, _wordCount);
         }
     }
@@ -98,6 +101,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         get
         {
             EnsureCleanedTextComputed();
+
             return _cleanedBuffer.AsSpan(0, _cleanedLength);
         }
     }
@@ -110,6 +114,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         get
         {
             EnsureCleanedTextComputed();
+
             return _cleanedLength;
         }
     }
@@ -117,7 +122,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     /// <summary>
     /// Character frequencies (excluding whitespace, lowercased).
     /// </summary>
-    public Dictionary<char, int> CharFrequencies => _charFrequencies ??= ComputeCharFrequencies();
+    public Dictionary<char, int> CharFrequencies => field ??= ComputeCharFrequencies();
 
     /// <summary>
     /// Hash-based word frequency map.
@@ -131,6 +136,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
                 EnsureWordsParsed();
                 _wordFrequencies = ComputeWordFrequencies();
             }
+
             return _wordFrequencies;
         }
     }
@@ -138,18 +144,22 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     /// <summary>
     /// Bigram data for entropy calculations.
     /// </summary>
-    public BigramData Bigrams => _bigrams ??= ComputeBigramData();
+    public BigramData Bigrams => field ??= ComputeBigramData();
 
     // ===== Private computation methods =====
 
     private void EnsureWordsParsed()
     {
-        if (_wordCount >= 0) return; // Already computed
+        if (_wordCount >= 0)
+        {
+            return; // Already computed
+        }
 
         if (_textLength == 0)
         {
             _wordRanges = Array.Empty<Range>();
             _wordCount = 0;
+
             return;
         }
 
@@ -158,12 +168,12 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         _wordRanges = ArrayPool<Range>.Shared.Rent(maxWords);
 
         var text = TextSpan;
-        int wordStart = -1;
-        int wordIdx = 0;
+        var wordStart = -1;
+        var wordIdx = 0;
 
-        for (int i = 0; i <= text.Length; i++)
+        for (var i = 0; i <= text.Length; i++)
         {
-            bool isWordChar = i < text.Length && !char.IsWhiteSpace(text[i]);
+            var isWordChar = i < text.Length && !char.IsWhiteSpace(text[i]);
 
             if (isWordChar && wordStart < 0)
             {
@@ -181,37 +191,50 @@ public sealed class PrecomputedTextAnalysis : IDisposable
 
     private void EnsureCleanedTextComputed()
     {
-        if (_cleanedLength >= 0) return; // Already computed
+        if (_cleanedLength >= 0)
+        {
+            return; // Already computed
+        }
 
         if (_textLength == 0)
         {
             _cleanedBuffer = Array.Empty<char>();
             _cleanedLength = 0;
+
             return;
         }
 
         // Count non-whitespace
         var text = TextSpan;
-        int count = 0;
+        var count = 0;
+
         foreach (var c in text)
         {
-            if (!char.IsWhiteSpace(c)) count++;
+            if (!char.IsWhiteSpace(c))
+            {
+                count++;
+            }
         }
 
         if (count == 0)
         {
             _cleanedBuffer = Array.Empty<char>();
             _cleanedLength = 0;
+
             return;
         }
 
         _cleanedBuffer = ArrayPool<char>.Shared.Rent(count);
-        int idx = 0;
+        var idx = 0;
+
         foreach (var c in text)
         {
             if (!char.IsWhiteSpace(c))
+            {
                 _cleanedBuffer[idx++] = char.ToLowerInvariant(c);
+            }
         }
+
         _cleanedLength = count;
     }
 
@@ -219,17 +242,28 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     {
         var frequencies = new Dictionary<char, int>();
 
-        if (_textLength == 0) return frequencies;
-
-        foreach (char c in TextSpan)
+        if (_textLength == 0)
         {
-            if (char.IsWhiteSpace(c)) continue;
+            return frequencies;
+        }
 
-            char normalized = char.ToLowerInvariant(c);
+        foreach (var c in TextSpan)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                continue;
+            }
+
+            var normalized = char.ToLowerInvariant(c);
+
             if (frequencies.TryGetValue(normalized, out var existing))
+            {
                 frequencies[normalized] = existing + 1;
+            }
             else
+            {
                 frequencies[normalized] = 1;
+            }
         }
 
         return frequencies;
@@ -238,10 +272,11 @@ public sealed class PrecomputedTextAnalysis : IDisposable
     private SpanWordFrequencyMap ComputeWordFrequencies()
     {
         // Estimate unique words as sqrt of total words (empirical heuristic)
-        var estimatedUnique = Math.Max(16, (int)Math.Sqrt(_wordCount) * 2);
+        var estimatedUnique = Math.Max(16, (int) Math.Sqrt(_wordCount) * 2);
         var map = new SpanWordFrequencyMap(TextMemory, estimatedUnique);
 
         var ranges = _wordRanges.AsSpan(0, _wordCount);
+
         foreach (var range in ranges)
         {
             map.AddOrIncrement(range);
@@ -258,14 +293,16 @@ public sealed class PrecomputedTextAnalysis : IDisposable
         var prevCharCounts = new Dictionary<char, int>();
 
         if (_cleanedLength < 2)
+        {
             return new BigramData(bigramCounts, prevCharCounts, _cleanedLength);
+        }
 
         var cleaned = CleanedTextSpan;
 
-        for (int i = 0; i < cleaned.Length - 1; i++)
+        for (var i = 0; i < cleaned.Length - 1; i++)
         {
-            char prevChar = cleaned[i];
-            char currChar = cleaned[i + 1];
+            var prevChar = cleaned[i];
+            var currChar = cleaned[i + 1];
 
             if (!bigramCounts.TryGetValue(prevChar, out var inner))
             {
@@ -274,14 +311,22 @@ public sealed class PrecomputedTextAnalysis : IDisposable
             }
 
             if (inner.TryGetValue(currChar, out var count))
+            {
                 inner[currChar] = count + 1;
+            }
             else
+            {
                 inner[currChar] = 1;
+            }
 
             if (prevCharCounts.TryGetValue(prevChar, out var prevCount))
+            {
                 prevCharCounts[prevChar] = prevCount + 1;
+            }
             else
+            {
                 prevCharCounts[prevChar] = 1;
+            }
         }
 
         return new BigramData(bigramCounts, prevCharCounts, _cleanedLength);
@@ -289,7 +334,11 @@ public sealed class PrecomputedTextAnalysis : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         if (_textBuffer != null)
@@ -298,13 +347,13 @@ public sealed class PrecomputedTextAnalysis : IDisposable
             _textBuffer = null;
         }
 
-        if (_cleanedBuffer != null && _cleanedBuffer.Length > 0)
+        if (_cleanedBuffer is {Length: > 0})
         {
             ArrayPool<char>.Shared.Return(_cleanedBuffer);
             _cleanedBuffer = null;
         }
 
-        if (_wordRanges != null && _wordRanges.Length > 0)
+        if (_wordRanges is {Length: > 0})
         {
             ArrayPool<Range>.Shared.Return(_wordRanges);
             _wordRanges = null;
@@ -319,8 +368,7 @@ public sealed class PrecomputedTextAnalysis : IDisposable
 /// </summary>
 public sealed class BigramData
 {
-    public BigramData(
-        Dictionary<char, Dictionary<char, int>> bigramCounts,
+    public BigramData(Dictionary<char, Dictionary<char, int>> bigramCounts,
         Dictionary<char, int> prevCharCounts,
         int cleanedTextLength)
     {
