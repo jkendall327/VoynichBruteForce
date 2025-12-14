@@ -9,9 +9,9 @@ public class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyperparame
 {
     private readonly Hyperparameters _hyperparameters = hyperparameters.Value;
 
-    public PipelineResult Run(Pipeline pipeline, SourceTextId sourceTextId)
+    public PipelineResult Run(Genome genome, string sourceText)
     {
-        (var sourceText, var modifiers) = pipeline;
+        (var sourceTextId, var modifiers) = (genome.SourceTextId, genome.Modifiers);
 
         var spanModifiers = modifiers
             .OfType<ISpanTextModifier>()

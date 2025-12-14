@@ -19,7 +19,7 @@ public class EvolutionBenchmarks
     private PipelineRunner? _runner;
     private ISourceTextRegistry? _sourceTextRegistry;
     private IGenomeFactory? _genomeFactory;
-    private Pipeline? _pipeline;
+    private string? _sourceText;
     private Genome? _genome;
     private int _seed;
 
@@ -46,8 +46,7 @@ public class EvolutionBenchmarks
 
         // Setup test data for individual operations
         _genome = _genomeFactory.CreateRandomGenome(modifierCount: 5);
-        var sourceText = _sourceTextRegistry.GetText(_genome.SourceTextId);
-        _pipeline = new Pipeline(sourceText, _genome.Modifiers);
+        _sourceText = _sourceTextRegistry.GetText(_genome.SourceTextId);
     }
 
     [GlobalCleanup]
@@ -59,7 +58,7 @@ public class EvolutionBenchmarks
     [Benchmark(Description = "Single pipeline execution")]
     public PipelineResult RunSinglePipeline()
     {
-        return _runner!.Run(_pipeline!, _genome!.SourceTextId);
+        return _runner!.Run(_genome!, _sourceText!);
     }
 
     [Benchmark(Description = "Single generation evaluation (population of 100)")]
@@ -77,8 +76,7 @@ public class EvolutionBenchmarks
         {
             var genome = population[i];
             var sourceText = _sourceTextRegistry!.GetText(genome.SourceTextId);
-            var pipeline = new Pipeline(sourceText, genome.Modifiers);
-            var result = _runner!.Run(pipeline, genome.SourceTextId);
+            var result = _runner!.Run(_genome!, sourceText!);
             rankedResults[i] = (genome, result);
         });
     }

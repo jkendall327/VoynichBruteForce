@@ -73,8 +73,7 @@ public partial class EvolutionEngine(
 
                     // Resolve genome to pipeline at evaluation time
                     var sourceText = sourceTextRegistry.GetText(genome.SourceTextId);
-                    var pipeline = new Pipeline(sourceText, genome.Modifiers);
-                    var result = runner.Run(pipeline, genome.SourceTextId);
+                    var result = runner.Run(genome, sourceText);
                     rankedResults[i] = (genome, result);
                 });
 
