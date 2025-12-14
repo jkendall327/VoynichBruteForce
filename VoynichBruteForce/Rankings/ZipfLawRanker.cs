@@ -1,3 +1,4 @@
+using System.Buffers;
 using Microsoft.Extensions.Options;
 
 namespace VoynichBruteForce.Rankings;
@@ -17,39 +18,38 @@ public class ZipfLawRanker(IOptions<VoynichProfile> profile) : IRuleAdherenceRan
 
     public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = analysis.Words;
-
-        if (words.Length < 10)
+        if (analysis.WordCount < 10)
         {
             return new(Name, 0, _profile.TargetZipfSlope, double.MaxValue, Weight);
         }
 
-        var frequencyMap = analysis.WordFrequencies;
+        // Get sorted frequencies from the span-based map
+        var (frequencies, count) = analysis.WordFrequencyMap.GetSortedFrequencies();
+        try
+        {
+            // Calculate slope using log-log regression
+            // log(frequency) = log(C) - α * log(rank)
+            // For ideal Zipf: α ≈ 1.0
+            double slope = CalculateLogLogSlope(frequencies.AsSpan(0, count));
 
-        // Sort by frequency descending
-        var sortedFrequencies = frequencyMap
-            .OrderByDescending(kvp => kvp.Value)
-            .Select(kvp => kvp.Value)
-            .ToList();
+            double rawDelta = Math.Abs(slope - _profile.TargetZipfSlope);
 
-        // Calculate slope using log-log regression
-        // log(frequency) = log(C) - α * log(rank)
-        // For ideal Zipf: α ≈ 1.0
-        double slope = CalculateLogLogSlope(sortedFrequencies);
+            // Normalize: 0.2 deviation in slope is one error unit
+            double tolerance = 0.2;
+            double normalizedError = Math.Pow(rawDelta / tolerance, 2);
 
-        double rawDelta = Math.Abs(slope - _profile.TargetZipfSlope);
-
-        // Normalize: 0.2 deviation in slope is one error unit
-        double tolerance = 0.2;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
-
-        return new(Name, slope, _profile.TargetZipfSlope, normalizedError, Weight);
+            return new(Name, slope, _profile.TargetZipfSlope, normalizedError, Weight);
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(frequencies);
+        }
     }
 
-    private double CalculateLogLogSlope(List<int> sortedFrequencies)
+    private static double CalculateLogLogSlope(ReadOnlySpan<int> sortedFrequencies)
     {
         // Use only top words to avoid noise from rare words
-        int sampleSize = Math.Min(100, sortedFrequencies.Count);
+        int sampleSize = Math.Min(100, sortedFrequencies.Length);
 
         double sumLogRank = 0;
         double sumLogFreq = 0;

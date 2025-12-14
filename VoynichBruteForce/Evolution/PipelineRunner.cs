@@ -27,53 +27,69 @@ public partial class PipelineRunner(IRankerProvider rankerProvider, IOptions<Hyp
 
         LogPipelineStarted(logger, modifiers.Count, spanModifiers.Count, stringOnlyModifiers.Count, sourceText.Length);
 
-        string resultText;
-
         // Phase 1: Run Span modifiers with zero-allocation ping-pong buffers
-        if (spanModifiers.Count > 0)
+        var context = new ProcessingContext(sourceText, sourceText.Length * 4);
+        try
         {
-            // Estimate max capacity: 4x for growth scenarios (affixes, letter doubling, etc.)
-            var context = new ProcessingContext(sourceText, sourceText.Length * 4);
-            try
+            foreach (var modifier in spanModifiers)
             {
-                foreach (var modifier in spanModifiers)
+                modifier.Modify(ref context);
+            }
+
+            // Phase 2: Run string-only modifiers (if any exist)
+            // Currently all modifiers implement ISpanTextModifier, so this is typically a no-op
+            if (stringOnlyModifiers.Count > 0)
+            {
+                // Fall back to string for legacy modifiers
+                var resultText = context.InputSpan.ToString();
+                foreach (var modifier in stringOnlyModifiers)
                 {
-                    modifier.Modify(ref context);
+                    resultText = modifier.ModifyText(resultText);
                 }
 
-                resultText = context.InputSpan.ToString();
+                LogTextTransformed(logger, sourceText.Length, resultText.Length);
+
+                if (resultText.Length < 100)
+                {
+                    LogDegenerateTextDetected(logger, resultText.Length);
+                    return new(sourceTextId, modifiers, [], _hyperparameters)
+                    {
+                        TotalErrorScore = double.MaxValue
+                    };
+                }
+
+                // Create analysis from string (legacy path)
+                using var stringAnalysis = new PrecomputedTextAnalysis(resultText);
+                return RunRankers(stringAnalysis, sourceTextId, modifiers);
             }
-            finally
+
+            // Fast path: no string allocation needed
+            var resultLength = context.CurrentLength;
+
+            LogTextTransformed(logger, sourceText.Length, resultLength);
+
+            if (resultLength < 100)
             {
-                context.Dispose();
+                LogDegenerateTextDetected(logger, resultLength);
+                return new(sourceTextId, modifiers, [], _hyperparameters)
+                {
+                    TotalErrorScore = double.MaxValue
+                };
             }
+
+            // Create analysis directly from span - NO .ToString()!
+            using var spanAnalysis = new PrecomputedTextAnalysis(context.InputSpan);
+            return RunRankers(spanAnalysis, sourceTextId, modifiers);
         }
-        else
+        finally
         {
-            resultText = sourceText;
+            context.Dispose();
         }
+    }
 
-        // Phase 2: Run string-only modifiers (e.g., HomophonicSubstitution, ReverseInterleave)
-        foreach (var modifier in stringOnlyModifiers)
-        {
-            resultText = modifier.ModifyText(resultText);
-        }
-
-        LogTextTransformed(logger, sourceText.Length, resultText.Length);
-
-        // Sanity check - prevent degenerate optimisation for empty texts by returning max error immediately.
-        if (resultText.Length < 100)
-        {
-            LogDegenerateTextDetected(logger, resultText.Length);
-            return new(sourceTextId, modifiers, [], _hyperparameters)
-            {
-                TotalErrorScore = double.MaxValue
-            };
-        }
-
+    private PipelineResult RunRankers(PrecomputedTextAnalysis analysis, SourceTextId sourceTextId, List<ITextModifier> modifiers)
+    {
         var rankers = rankerProvider.GetRankers();
-        var analysis = new PrecomputedTextAnalysis(resultText);
-
         var results = rankers
             .Select(ranker => ranker.CalculateRank(analysis))
             .ToList();

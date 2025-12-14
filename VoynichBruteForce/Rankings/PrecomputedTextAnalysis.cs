@@ -1,90 +1,229 @@
+using System.Buffers;
+
 namespace VoynichBruteForce.Rankings;
 
 /// <summary>
-/// Pre-computes and caches text analysis data to avoid redundant parsing across multiple rankers.
-/// All properties are lazily initialized on first access.
+/// Pre-computes and caches text analysis data using span-based operations
+/// to minimize allocations. Implements IDisposable to return pooled arrays.
 /// </summary>
-public sealed class PrecomputedTextAnalysis
+public sealed class PrecomputedTextAnalysis : IDisposable
 {
-    private static readonly char[] WhitespaceSeparators = [' ', '\t', '\n', '\r'];
+    // Backing storage (owned, from ArrayPool)
+    private char[]? _textBuffer;
+    private readonly int _textLength;
 
-    private readonly string _text;
+    // Cleaned text (whitespace removed, lowercased) - also pooled
+    private char[]? _cleanedBuffer;
+    private int _cleanedLength = -1; // -1 means not computed yet
 
-    public PrecomputedTextAnalysis(string text) => _text = text;
+    // Word boundaries (pooled)
+    private Range[]? _wordRanges;
+    private int _wordCount = -1; // -1 means not computed yet
 
-    /// <summary>
-    /// The original text.
-    /// </summary>
-    public string Text => _text;
+    // Lazy-computed data
+    private Dictionary<char, int>? _charFrequencies;
+    private SpanWordFrequencyMap? _wordFrequencies;
+    private BigramData? _bigrams;
 
-    /// <summary>
-    /// Words split by whitespace, with empty entries removed.
-    /// Used by: NeighboringWordSimilarityRanker, RepeatedAdjacentWordsRanker, VocabularySizeRanker
-    /// </summary>
-    public string[] Words => field ??= ComputeWords();
-
-    /// <summary>
-    /// Text with whitespace removed and lowercased.
-    /// Used by: ConditionalEntropyRanker
-    /// </summary>
-    public string CleanedText => field ??= ComputeCleanedText();
+    private bool _disposed;
 
     /// <summary>
-    /// Frequency of each character (excluding whitespace, lowercased).
-    /// Used by: SingleCharEntropyRanker
+    /// Creates analysis from a span (avoids .ToString()).
+    /// Copies to a new pooled array.
     /// </summary>
-    public Dictionary<char, int> CharFrequencies => field ??= ComputeCharFrequencies();
-
-    /// <summary>
-    /// Word frequency map (case-insensitive).
-    /// Used by: ZipfLawRanker, WordLengthFrequencyRanker, VocabularySizeRanker
-    /// </summary>
-    public Dictionary<string, int> WordFrequencies => field ??= ComputeWordFrequencies();
-
-    /// <summary>
-    /// Bigram analysis data for H2 entropy calculation.
-    /// Used by: ConditionalEntropyRanker
-    /// </summary>
-    public BigramData Bigrams => field ??= ComputeBigramData();
-
-    private string[] ComputeWords()
+    public PrecomputedTextAnalysis(ReadOnlySpan<char> text)
     {
-        return _text.Split(WhitespaceSeparators, StringSplitOptions.RemoveEmptyEntries);
+        _textLength = text.Length;
+
+        if (_textLength == 0)
+        {
+            _textBuffer = null;
+            return;
+        }
+
+        // Rent and copy the text
+        _textBuffer = ArrayPool<char>.Shared.Rent(_textLength);
+        text.CopyTo(_textBuffer);
     }
 
-    private string ComputeCleanedText()
+    /// <summary>
+    /// Legacy constructor for backward compatibility with string input.
+    /// </summary>
+    public PrecomputedTextAnalysis(string text) : this(text.AsSpan()) { }
+
+    /// <summary>
+    /// Read-only view of the original text.
+    /// </summary>
+    public ReadOnlySpan<char> TextSpan => _textBuffer.AsSpan(0, _textLength);
+
+    /// <summary>
+    /// Read-only memory for passing to components that need Memory&lt;char&gt;.
+    /// </summary>
+    public ReadOnlyMemory<char> TextMemory => _textBuffer.AsMemory(0, _textLength);
+
+    /// <summary>
+    /// Total character count of original text.
+    /// </summary>
+    public int Length => _textLength;
+
+    /// <summary>
+    /// Number of words in the text.
+    /// </summary>
+    public int WordCount
     {
-        // Count non-whitespace characters
-        var count = 0;
-        foreach (var c in _text)
+        get
         {
-            if (!char.IsWhiteSpace(c))
-                count++;
+            EnsureWordsParsed();
+            return _wordCount;
+        }
+    }
+
+    /// <summary>
+    /// Gets word boundaries for span-based word access.
+    /// </summary>
+    public WordBoundaries Words
+    {
+        get
+        {
+            EnsureWordsParsed();
+            return new WordBoundaries(_wordRanges!, _wordCount);
+        }
+    }
+
+    /// <summary>
+    /// Span view of cleaned text (whitespace removed, lowercased).
+    /// </summary>
+    public ReadOnlySpan<char> CleanedTextSpan
+    {
+        get
+        {
+            EnsureCleanedTextComputed();
+            return _cleanedBuffer.AsSpan(0, _cleanedLength);
+        }
+    }
+
+    /// <summary>
+    /// Length of cleaned text.
+    /// </summary>
+    public int CleanedTextLength
+    {
+        get
+        {
+            EnsureCleanedTextComputed();
+            return _cleanedLength;
+        }
+    }
+
+    /// <summary>
+    /// Character frequencies (excluding whitespace, lowercased).
+    /// </summary>
+    public Dictionary<char, int> CharFrequencies => _charFrequencies ??= ComputeCharFrequencies();
+
+    /// <summary>
+    /// Hash-based word frequency map.
+    /// </summary>
+    public SpanWordFrequencyMap WordFrequencyMap
+    {
+        get
+        {
+            if (_wordFrequencies == null)
+            {
+                EnsureWordsParsed();
+                _wordFrequencies = ComputeWordFrequencies();
+            }
+            return _wordFrequencies;
+        }
+    }
+
+    /// <summary>
+    /// Bigram data for entropy calculations.
+    /// </summary>
+    public BigramData Bigrams => _bigrams ??= ComputeBigramData();
+
+    // ===== Private computation methods =====
+
+    private void EnsureWordsParsed()
+    {
+        if (_wordCount >= 0) return; // Already computed
+
+        if (_textLength == 0)
+        {
+            _wordRanges = Array.Empty<Range>();
+            _wordCount = 0;
+            return;
+        }
+
+        // Estimate: at most textLength/2 words (every other char is space)
+        var maxWords = (_textLength + 1) / 2;
+        _wordRanges = ArrayPool<Range>.Shared.Rent(maxWords);
+
+        var text = TextSpan;
+        int wordStart = -1;
+        int wordIdx = 0;
+
+        for (int i = 0; i <= text.Length; i++)
+        {
+            bool isWordChar = i < text.Length && !char.IsWhiteSpace(text[i]);
+
+            if (isWordChar && wordStart < 0)
+            {
+                wordStart = i;
+            }
+            else if (!isWordChar && wordStart >= 0)
+            {
+                _wordRanges[wordIdx++] = new Range(wordStart, i);
+                wordStart = -1;
+            }
+        }
+
+        _wordCount = wordIdx;
+    }
+
+    private void EnsureCleanedTextComputed()
+    {
+        if (_cleanedLength >= 0) return; // Already computed
+
+        if (_textLength == 0)
+        {
+            _cleanedBuffer = Array.Empty<char>();
+            _cleanedLength = 0;
+            return;
+        }
+
+        // Count non-whitespace
+        var text = TextSpan;
+        int count = 0;
+        foreach (var c in text)
+        {
+            if (!char.IsWhiteSpace(c)) count++;
         }
 
         if (count == 0)
-            return string.Empty;
-
-        // Allocate exact size and fill with lowercased chars
-        Span<char> buffer = count <= 256 ? stackalloc char[count] : new char[count];
-        var index = 0;
-        foreach (var c in _text)
         {
-            if (!char.IsWhiteSpace(c))
-                buffer[index++] = char.ToLowerInvariant(c);
+            _cleanedBuffer = Array.Empty<char>();
+            _cleanedLength = 0;
+            return;
         }
 
-        return new string(buffer);
+        _cleanedBuffer = ArrayPool<char>.Shared.Rent(count);
+        int idx = 0;
+        foreach (var c in text)
+        {
+            if (!char.IsWhiteSpace(c))
+                _cleanedBuffer[idx++] = char.ToLowerInvariant(c);
+        }
+        _cleanedLength = count;
     }
 
     private Dictionary<char, int> ComputeCharFrequencies()
     {
         var frequencies = new Dictionary<char, int>();
 
-        foreach (char c in _text)
+        if (_textLength == 0) return frequencies;
+
+        foreach (char c in TextSpan)
         {
-            if (char.IsWhiteSpace(c))
-                continue;
+            if (char.IsWhiteSpace(c)) continue;
 
             char normalized = char.ToLowerInvariant(c);
             if (frequencies.TryGetValue(normalized, out var existing))
@@ -96,37 +235,38 @@ public sealed class PrecomputedTextAnalysis
         return frequencies;
     }
 
-    private Dictionary<string, int> ComputeWordFrequencies()
+    private SpanWordFrequencyMap ComputeWordFrequencies()
     {
-        var frequencies = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var words = Words;
+        // Estimate unique words as sqrt of total words (empirical heuristic)
+        var estimatedUnique = Math.Max(16, (int)Math.Sqrt(_wordCount) * 2);
+        var map = new SpanWordFrequencyMap(TextMemory, estimatedUnique);
 
-        foreach (var word in words)
+        var ranges = _wordRanges.AsSpan(0, _wordCount);
+        foreach (var range in ranges)
         {
-            if (frequencies.TryGetValue(word, out var existing))
-                frequencies[word] = existing + 1;
-            else
-                frequencies[word] = 1;
+            map.AddOrIncrement(range);
         }
 
-        return frequencies;
+        return map;
     }
 
     private BigramData ComputeBigramData()
     {
-        var cleanedText = CleanedText;
+        EnsureCleanedTextComputed();
+
         var bigramCounts = new Dictionary<char, Dictionary<char, int>>();
         var prevCharCounts = new Dictionary<char, int>();
 
-        if (cleanedText.Length < 2)
-            return new BigramData(bigramCounts, prevCharCounts, cleanedText.Length);
+        if (_cleanedLength < 2)
+            return new BigramData(bigramCounts, prevCharCounts, _cleanedLength);
 
-        for (int i = 0; i < cleanedText.Length - 1; i++)
+        var cleaned = CleanedTextSpan;
+
+        for (int i = 0; i < cleaned.Length - 1; i++)
         {
-            char prevChar = cleanedText[i];
-            char currChar = cleanedText[i + 1];
+            char prevChar = cleaned[i];
+            char currChar = cleaned[i + 1];
 
-            // Count bigrams
             if (!bigramCounts.TryGetValue(prevChar, out var inner))
             {
                 inner = new Dictionary<char, int>();
@@ -138,14 +278,39 @@ public sealed class PrecomputedTextAnalysis
             else
                 inner[currChar] = 1;
 
-            // Count previous character occurrences (for conditional probability)
             if (prevCharCounts.TryGetValue(prevChar, out var prevCount))
                 prevCharCounts[prevChar] = prevCount + 1;
             else
                 prevCharCounts[prevChar] = 1;
         }
 
-        return new BigramData(bigramCounts, prevCharCounts, cleanedText.Length);
+        return new BigramData(bigramCounts, prevCharCounts, _cleanedLength);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_textBuffer != null)
+        {
+            ArrayPool<char>.Shared.Return(_textBuffer);
+            _textBuffer = null;
+        }
+
+        if (_cleanedBuffer != null && _cleanedBuffer.Length > 0)
+        {
+            ArrayPool<char>.Shared.Return(_cleanedBuffer);
+            _cleanedBuffer = null;
+        }
+
+        if (_wordRanges != null && _wordRanges.Length > 0)
+        {
+            ArrayPool<Range>.Shared.Return(_wordRanges);
+            _wordRanges = null;
+        }
+
+        _wordFrequencies?.Dispose();
     }
 }
 

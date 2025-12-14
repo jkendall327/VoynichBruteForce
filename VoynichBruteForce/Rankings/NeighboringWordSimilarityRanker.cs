@@ -1,3 +1,4 @@
+using System.Buffers;
 using Microsoft.Extensions.Options;
 
 namespace VoynichBruteForce.Rankings;
@@ -11,28 +12,35 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
 {
     private readonly VoynichProfile _profile = profile.Value;
 
+    // Maximum word length for stackalloc. Beyond this, use ArrayPool.
+    private const int MaxStackallocLength = 128;
+
     public string Name => "Neighboring Word Similarity";
 
     public RuleWeight Weight => RuleWeight.Standard;
 
     public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = analysis.Words;
+        var wordCount = analysis.WordCount;
 
-        if (words.Length < 2)
+        if (wordCount < 2)
         {
             return new(Name, 0, _profile.TargetNeighboringWordSimilarity, 0, Weight);
         }
 
+        var words = analysis.Words;
+        var text = analysis.TextSpan;
         int similarPairCount = 0;
         int totalPairs = 0;
 
-        for (int i = 1; i < words.Length; i++)
+        for (int i = 1; i < wordCount; i++)
         {
-            int distance = LevenshteinDistance(words[i - 1], words[i]);
-            int maxLength = Math.Max(words[i - 1].Length, words[i].Length);
+            var prev = words.GetWord(text, i - 1);
+            var curr = words.GetWord(text, i);
 
-            // Normalize distance by max word length to get similarity ratio
+            int distance = LevenshteinDistance(prev, curr);
+            int maxLength = Math.Max(prev.Length, curr.Length);
+
             // Similar words have distance <= 2 (one or two character changes)
             if (maxLength > 0 && distance <= 2)
             {
@@ -52,39 +60,75 @@ public class NeighboringWordSimilarityRanker(IOptions<VoynichProfile> profile) :
         return new(Name, similarityRatio, _profile.TargetNeighboringWordSimilarity, normalizedError, Weight);
     }
 
-    private int LevenshteinDistance(string source, string target)
+    /// <summary>
+    /// Calculates Levenshtein distance using two-row optimization.
+    /// Uses stackalloc for small inputs, ArrayPool for larger ones.
+    /// </summary>
+    private static int LevenshteinDistance(ReadOnlySpan<char> source, ReadOnlySpan<char> target)
     {
-        if (string.IsNullOrEmpty(source))
-            return target?.Length ?? 0;
+        if (source.IsEmpty)
+            return target.Length;
 
-        if (string.IsNullOrEmpty(target))
+        if (target.IsEmpty)
             return source.Length;
 
         int n = source.Length;
         int m = target.Length;
-        int[,] distance = new int[n + 1, m + 1];
 
-        // Initialize first column and row
-        for (int i = 0; i <= n; i++)
-            distance[i, 0] = i;
+        // Use two-row optimization: only need current and previous row
+        int rowSize = m + 1;
 
-        for (int j = 0; j <= m; j++)
-            distance[0, j] = j;
+        // Use stackalloc for reasonable sizes, ArrayPool otherwise
+        int[]? pooledPrev = null;
+        int[]? pooledCurr = null;
 
-        // Calculate distances
-        for (int i = 1; i <= n; i++)
+        Span<int> prevRow = rowSize <= MaxStackallocLength
+            ? stackalloc int[rowSize]
+            : (pooledPrev = ArrayPool<int>.Shared.Rent(rowSize)).AsSpan(0, rowSize);
+
+        Span<int> currRow = rowSize <= MaxStackallocLength
+            ? stackalloc int[rowSize]
+            : (pooledCurr = ArrayPool<int>.Shared.Rent(rowSize)).AsSpan(0, rowSize);
+
+        try
         {
-            for (int j = 1; j <= m; j++)
+            // Initialize first row
+            for (int j = 0; j <= m; j++)
+                prevRow[j] = j;
+
+            // Calculate distances row by row
+            for (int i = 1; i <= n; i++)
             {
-                int cost = (source[i - 1] == target[j - 1]) ? 0 : 1;
+                currRow[0] = i;
+                char sourceChar = char.ToLowerInvariant(source[i - 1]);
 
-                distance[i, j] = Math.Min(
-                    Math.Min(distance[i - 1, j] + 1,      // deletion
-                             distance[i, j - 1] + 1),     // insertion
-                    distance[i - 1, j - 1] + cost);       // substitution
+                for (int j = 1; j <= m; j++)
+                {
+                    char targetChar = char.ToLowerInvariant(target[j - 1]);
+                    int cost = sourceChar == targetChar ? 0 : 1;
+
+                    currRow[j] = Math.Min(
+                        Math.Min(
+                            currRow[j - 1] + 1,      // insertion
+                            prevRow[j] + 1),         // deletion
+                        prevRow[j - 1] + cost);      // substitution
+                }
+
+                // Swap rows (can't use tuple swap with Span<T>)
+                var temp = prevRow;
+                prevRow = currRow;
+                currRow = temp;
             }
-        }
 
-        return distance[n, m];
+            // Result is in prevRow after the swap
+            return prevRow[m];
+        }
+        finally
+        {
+            if (pooledPrev != null)
+                ArrayPool<int>.Shared.Return(pooledPrev);
+            if (pooledCurr != null)
+                ArrayPool<int>.Shared.Return(pooledCurr);
+        }
     }
 }

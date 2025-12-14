@@ -16,23 +16,29 @@ public class RepeatedAdjacentWordsRanker(IOptions<VoynichProfile> profile) : IRu
 
     public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = analysis.Words;
+        var wordCount = analysis.WordCount;
 
-        if (words.Length < 2)
+        if (wordCount < 2)
         {
             return new(Name, 0, _profile.TargetRepeatedAdjacentWordsRatio, 0, Weight);
         }
 
+        var words = analysis.Words;
+        var text = analysis.TextSpan;
         int repetitionCount = 0;
-        for (int i = 1; i < words.Length; i++)
+
+        for (int i = 1; i < wordCount; i++)
         {
-            if (words[i].Equals(words[i - 1], StringComparison.OrdinalIgnoreCase))
+            var prev = words.GetWord(text, i - 1);
+            var curr = words.GetWord(text, i);
+
+            if (prev.Equals(curr, StringComparison.OrdinalIgnoreCase))
             {
                 repetitionCount++;
             }
         }
 
-        double repetitionRatio = (double)repetitionCount / words.Length;
+        double repetitionRatio = (double)repetitionCount / wordCount;
         double rawDelta = Math.Abs(repetitionRatio - _profile.TargetRepeatedAdjacentWordsRatio);
 
         // Normalize: 0.05 (5% deviation) is one error unit

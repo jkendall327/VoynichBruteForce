@@ -1,3 +1,4 @@
+using System.Buffers;
 using Microsoft.Extensions.Options;
 
 namespace VoynichBruteForce.Rankings;
@@ -16,42 +17,65 @@ public class WordLengthFrequencyRanker(IOptions<VoynichProfile> profile) : IRule
 
     public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = analysis.Words;
-
-        if (words.Length < 10)
+        if (analysis.WordCount < 10)
         {
             return new(Name, 0, _profile.TargetWordLengthFrequencyCorrelation, double.MaxValue, Weight);
         }
 
-        var frequencyMap = analysis.WordFrequencies;
+        var freqMap = analysis.WordFrequencyMap;
+        var uniqueCount = freqMap.UniqueWordCount;
 
-        // Calculate Pearson correlation between word length and frequency
-        var dataPoints = frequencyMap
-            .Select(kvp => (Length: (double)kvp.Key.Length, Frequency: (double)kvp.Value))
-            .ToList();
+        if (uniqueCount < 2)
+        {
+            return new(Name, 0, _profile.TargetWordLengthFrequencyCorrelation, double.MaxValue, Weight);
+        }
 
-        double correlation = CalculatePearsonCorrelation(dataPoints);
+        // Rent arrays for lengths and frequencies
+        var lengths = ArrayPool<int>.Shared.Rent(uniqueCount);
+        var frequencies = ArrayPool<int>.Shared.Rent(uniqueCount);
 
-        double rawDelta = Math.Abs(correlation - _profile.TargetWordLengthFrequencyCorrelation);
+        try
+        {
+            var count = freqMap.GetLengthsAndFrequencies(lengths, frequencies);
 
-        // Normalize: 0.2 deviation in correlation is one error unit
-        double tolerance = 0.2;
-        double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+            // Calculate Pearson correlation between word length and frequency
+            double correlation = CalculatePearsonCorrelation(
+                lengths.AsSpan(0, count),
+                frequencies.AsSpan(0, count));
 
-        return new(Name, correlation, _profile.TargetWordLengthFrequencyCorrelation, normalizedError, Weight);
+            double rawDelta = Math.Abs(correlation - _profile.TargetWordLengthFrequencyCorrelation);
+
+            // Normalize: 0.2 deviation in correlation is one error unit
+            double tolerance = 0.2;
+            double normalizedError = Math.Pow(rawDelta / tolerance, 2);
+
+            return new(Name, correlation, _profile.TargetWordLengthFrequencyCorrelation, normalizedError, Weight);
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(lengths);
+            ArrayPool<int>.Shared.Return(frequencies);
+        }
     }
 
-    private double CalculatePearsonCorrelation(List<(double Length, double Frequency)> dataPoints)
+    private static double CalculatePearsonCorrelation(ReadOnlySpan<int> lengths, ReadOnlySpan<int> frequencies)
     {
-        if (dataPoints.Count < 2)
-            return 0;
+        int n = lengths.Length;
+        if (n < 2) return 0;
 
-        int n = dataPoints.Count;
-        double sumX = dataPoints.Sum(p => p.Length);
-        double sumY = dataPoints.Sum(p => p.Frequency);
-        double sumXY = dataPoints.Sum(p => p.Length * p.Frequency);
-        double sumX2 = dataPoints.Sum(p => p.Length * p.Length);
-        double sumY2 = dataPoints.Sum(p => p.Frequency * p.Frequency);
+        double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            double x = lengths[i];
+            double y = frequencies[i];
+
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumX2 += x * x;
+            sumY2 += y * y;
+        }
 
         double numerator = n * sumXY - sumX * sumY;
         double denominator = Math.Sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));

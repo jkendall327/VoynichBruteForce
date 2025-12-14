@@ -16,16 +16,16 @@ public class VocabularySizeRanker(IOptions<VoynichProfile> profile) : IRuleAdher
 
     public RankerResult CalculateRank(PrecomputedTextAnalysis analysis)
     {
-        var words = analysis.Words;
+        var wordCount = analysis.WordCount;
 
-        if (words.Length == 0)
+        if (wordCount == 0)
         {
             return new(Name, 0, _profile.TargetTypeTokenRatio, 0, Weight);
         }
 
-        // Unique words count is the number of entries in the word frequency map
-        int uniqueWordCount = analysis.WordFrequencies.Count;
-        double typeTokenRatio = (double)uniqueWordCount / words.Length;
+        // Unique words count from the hash-based frequency map
+        int uniqueWordCount = analysis.WordFrequencyMap.UniqueWordCount;
+        double typeTokenRatio = (double)uniqueWordCount / wordCount;
 
         double rawDelta = Math.Abs(typeTokenRatio - _profile.TargetTypeTokenRatio);
 
